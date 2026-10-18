@@ -4,8 +4,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": [],
-      "outputs": ["dist/**"],
+      "inputs": ["$TURBO_DEFAULT$", "!ticket-graph.schema.json"],
+      "outputs": ["dist/**", "ticket-graph.schema.json"],
       "tags": ["quality:light"]
     },
     "format:check": {
@@ -42,7 +42,7 @@
       "tags": ["work:release"]
     },
     "test": {
-      "dependsOn": [],
+      "dependsOn": ["build"],
       "inputs": [],
       "outputs": [],
       "tags": ["quality:light"]
@@ -52,7 +52,8 @@
       "inputs": [],
       "outputs": [],
       "cache": false,
-      "tags": ["quality:heavy"]
+      "tags": ["quality:heavy"],
+      "env": ["TICKETS_PACKED_BIN", "TICKETS_PACKED_PACKAGE_ROOT"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],

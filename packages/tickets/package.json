@@ -1,15 +1,34 @@
 {
   "name": "@ykdz/tickets",
-  "private": true,
+  "version": "1.0.0",
+  "description": "本地 Markdown 票图管理命令行工具",
+  "homepage": "https://github.com/YKDZ/tickets#readme",
+  "bugs": {
+    "url": "https://github.com/YKDZ/tickets/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YKDZ/tickets.git",
+    "directory": "packages/tickets"
+  },
   "bin": {
     "tickets": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "ticket-graph.schema.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --pretty false",
+    "build": "tsc -p tsconfig.build.json --pretty false && node scripts/generate-config-schema.ts && oxfmt --write ticket-graph.schema.json",
     "format:check": "oxfmt --list-different .",
     "format:write": "oxfmt --write .",
     "lint": "oxlint --quiet --format=unix --ignore-pattern node_modules .",
@@ -23,11 +42,13 @@
   "dependencies": {
     "@valibot/to-json-schema": "catalog:",
     "@ykdz/cli-contract": "catalog:",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@ykdz/typescript-config": "link:../typescript-config",
+    "ajv": "^8.20.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",

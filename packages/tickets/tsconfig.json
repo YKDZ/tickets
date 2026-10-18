@@ -2,7 +2,7 @@
   "extends": "@ykdz/typescript-config/base.json",
   "compilerOptions": {
     "customConditions": ["source"],
-    "declaration": true,
+    "declaration": false,
     "erasableSyntaxOnly": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",

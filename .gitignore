@@ -16,3 +16,4 @@ test-results/
 /AGENTS.md
 /.agents
 /skills-lock.json
+/packages/tickets/ticket-graph.schema.json

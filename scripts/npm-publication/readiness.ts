@@ -79,6 +79,7 @@ type TextFact =
 
 const publicationFiles = [
   "dist",
+  "ticket-graph.schema.json",
   "README.md",
   "LICENSE",
   "CHANGELOG.md",
@@ -592,7 +593,7 @@ function addManifestBlockers(options: {
     isObject(manifest.engines) &&
     manifest.engines.node === expectedPublicNodeRangeFromRoot &&
     validRecordOfStrings(runtimeDependencies) &&
-    ["@ykdz/cli-contract", "@valibot/to-json-schema", "valibot"].every(
+    ["@ykdz/cli-contract", "@valibot/to-json-schema", "valibot", "yaml"].every(
       (name) =>
         typeof runtimeDependencies[name] === "string" &&
         runtimeDependencies[name].trim().length > 0,

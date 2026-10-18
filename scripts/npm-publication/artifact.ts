@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   lstat,
   mkdtemp,
+  mkdir,
   readFile,
   readdir,
   realpath,
@@ -17,7 +18,11 @@ import { pathToFileURL } from "node:url";
 import { validRange } from "semver";
 import { list } from "tar";
 
-import { hasLookupEvidence, hasSchemaEvidence } from "./handoff.ts";
+import {
+  hasCheckEvidence,
+  hasSchemaEvidence,
+  publicationArtifactFiles,
+} from "./handoff.ts";
 import {
   inspectNpmPublicationReadiness,
   type NpmPublicationReadiness,
@@ -38,17 +43,18 @@ function hasUsageFailure(source: string): boolean {
   }
 }
 
-function hasNotFoundFailure(source: string): boolean {
+function hasReadFailure(source: string): boolean {
   try {
     const value: unknown = JSON.parse(source);
     return (
       isObject(value) &&
       value.schemaVersion === "1" &&
-      value.command === "lookup" &&
+      value.command === "check" &&
       value.kind === "failure" &&
-      value.variant === "notFound" &&
+      value.variant === "rejected" &&
       isObject(value.data) &&
-      value.data.name === "missing"
+      isObject(value.data.error) &&
+      value.data.error.code === "READ_FAILED"
     );
   } catch {
     return false;
@@ -129,13 +135,18 @@ export type VerifiedPublicationArtifactReceipt = {
       readonly stdout: string;
     },
     {
-      readonly name: "lookup";
-      readonly args: readonly ["lookup", "ada"];
+      readonly name: "check";
+      readonly args: readonly ["check", "--config", "ticket-graph.json"];
       readonly stdout: string;
     },
     {
       readonly name: "schema";
       readonly args: readonly ["schema"];
+      readonly stdout: string;
+    },
+    {
+      readonly name: "journeys";
+      readonly args: readonly [];
       readonly stdout: string;
     },
   ];
@@ -189,16 +200,7 @@ type CommandPlan = {
   readonly environment: NodeJS.ProcessEnv;
 };
 
-const expectedFiles = [
-  "package/CHANGELOG.md",
-  "package/LICENSE",
-  "package/README.md",
-  "package/dist/cli-command-identity.js",
-  "package/dist/cli.js",
-  "package/dist/main.js",
-  "package/dist/standard-schema.js",
-  "package/package.json",
-] as const;
+const expectedFiles = publicationArtifactFiles;
 
 const allowedPackedManifestFields = new Set([
   "bin",
@@ -575,17 +577,21 @@ export function inspectPackedManifestContract(options: {
     sameJson(manifest.engines, sourceManifest.engines);
   const exactFiles =
     Array.isArray(files) &&
-    files.length === 4 &&
-    ["dist", "README.md", "LICENSE", "CHANGELOG.md"].every((item) =>
-      files.includes(item),
-    );
+    files.length === 5 &&
+    [
+      "dist",
+      "README.md",
+      "LICENSE",
+      "CHANGELOG.md",
+      "ticket-graph.schema.json",
+    ].every((item) => files.includes(item));
   const exactBin =
     isObject(bin) &&
     Object.keys(bin).length === 1 &&
     bin[readiness.publication.commandName] === "./dist/cli.js";
   const exactDependencies =
     isObject(dependencies) &&
-    ["@ykdz/cli-contract", "@valibot/to-json-schema", "valibot"].every(
+    ["@ykdz/cli-contract", "@valibot/to-json-schema", "valibot", "yaml"].every(
       (name) =>
         typeof dependencies[name] === "string" &&
         validRange(dependencies[name]) !== null,
@@ -1076,9 +1082,25 @@ export async function verifyNpmPublicationArtifact(options: {
     }
     const helpArgs = ["--help"] as const;
     const versionArgs = ["--version"] as const;
-    const lookupArgs = ["lookup", "ada"] as const;
+    await mkdir(path.join(consumerDirectory, "issues"));
+    await writeFile(
+      path.join(consumerDirectory, "issues/01-ticket.md"),
+      "---\nstatus: open\nblocked_by: []\n---\n正文。\n",
+    );
+    await writeFile(
+      path.join(consumerDirectory, "ticket-graph.json"),
+      JSON.stringify({ tickets: "issues", completion: { values: ["done"] } }),
+    );
+    const checkArgs = ["check", "--config", "ticket-graph.json"] as const;
     const schemaArgs = ["schema"] as const;
-    const invalidLookupArgs = ["lookup", "   "] as const;
+    const invalidCheckArgs = [
+      "set-status",
+      "--config",
+      "ticket-graph.json",
+      "bad",
+      "--status",
+      "done",
+    ] as const;
     const helpCommand = planInstalledBinCommand({
       platform: process.platform,
       binPath,
@@ -1111,20 +1133,20 @@ export async function verifyNpmPublicationArtifact(options: {
       result = { kind: "failed", failure: version };
       return result;
     }
-    const lookupCommand = planInstalledBinCommand({
+    const checkCommand = planInstalledBinCommand({
       platform: process.platform,
       binPath,
-      args: lookupArgs,
+      args: checkArgs,
       environment: childEnvironment,
     });
-    const lookup = await smokeCommand({
-      executable: lookupCommand.executable,
-      args: lookupCommand.args,
+    const check = await smokeCommand({
+      executable: checkCommand.executable,
+      args: checkCommand.args,
       cwd: consumerDirectory,
-      env: lookupCommand.environment,
+      env: checkCommand.environment,
     });
-    if ("code" in lookup) {
-      result = { kind: "failed", failure: lookup };
+    if ("code" in check) {
+      result = { kind: "failed", failure: check };
       return result;
     }
     const schemaCommand = planInstalledBinCommand({
@@ -1145,11 +1167,11 @@ export async function verifyNpmPublicationArtifact(options: {
     }
     if (
       !help.stdout.includes(readiness.publication.commandName) ||
-      !help.stdout.includes("lookup") ||
+      !help.stdout.includes("check") ||
       !help.stdout.includes("schema") ||
       version.stdout !==
         `${readiness.publication.commandName} ${readiness.publication.version}\n` ||
-      !hasLookupEvidence(lookup.stdout) ||
+      !hasCheckEvidence(check.stdout) ||
       !hasSchemaEvidence(schema.stdout, readiness.publication.commandName)
     ) {
       result = {
@@ -1159,9 +1181,9 @@ export async function verifyNpmPublicationArtifact(options: {
           JSON.stringify({
             help: help.stdout,
             version: version.stdout,
-            lookup: lookup.stdout,
+            check: check.stdout,
           }),
-          "安装后的帮助、实际版本、lookup 查询及完整 schema 契约",
+          "安装后的帮助、实际版本、票图检查及完整 schema 契约",
           "修正制品中的命令身份或行为后重试。",
         ),
       };
@@ -1169,11 +1191,15 @@ export async function verifyNpmPublicationArtifact(options: {
     }
     for (const scenario of [
       {
-        args: [...invalidLookupArgs, "--output-format", "text"],
+        args: [...invalidCheckArgs],
         exitCode: 2,
         accepts: hasUsageFailure,
       },
-      { args: ["lookup", "missing"], exitCode: 1, accepts: hasNotFoundFailure },
+      {
+        args: ["check", "--config", "missing.json"],
+        exitCode: 1,
+        accepts: hasReadFailure,
+      },
     ]) {
       const command = planInstalledBinCommand({
         platform: process.platform,
@@ -1197,7 +1223,7 @@ export async function verifyNpmPublicationArtifact(options: {
           failure: failure(
             "consumer-smoke-failed",
             JSON.stringify(observed),
-            "非法输入应退出 2，未找到记录应退出 1；均通过 stderr 返回原生结果。",
+            "非法输入应退出 2，配置读取失败应退出 1；均通过 stderr 返回原生结果。",
             "修正安装后命令的失败协议并重试。",
             {
               executable: command.executable,
@@ -1210,6 +1236,36 @@ export async function verifyNpmPublicationArtifact(options: {
       }
     }
 
+    const journeys = await runCommand({
+      executable: "pnpm",
+      args: [
+        "exec",
+        "turbo",
+        "run",
+        "test:e2e",
+        `--filter=${readiness.publication.packageName}`,
+      ],
+      cwd: repositoryRoot,
+      env: {
+        ...childEnvironment,
+        TICKETS_PACKED_BIN: binPath,
+        TICKETS_PACKED_PACKAGE_ROOT: installedPackageRoot,
+      },
+    });
+    if (journeys.exitCode !== 0) {
+      result = {
+        kind: "failed",
+        failure: commandFailure(
+          "consumer-smoke-failed",
+          "pnpm",
+          ["exec", "turbo", "run", "test:e2e"],
+          journeys,
+          "安装包通过正式票图旅程",
+          "修复安装包行为并重试。",
+        ),
+      };
+      return result;
+    }
     const artifactBytes = await readFile(packedArtifactPath);
     const digest = createHash("sha512").update(artifactBytes).digest();
     const artifactPath = path.join(outputDirectory, artifactBasename);
@@ -1249,8 +1305,9 @@ export async function verifyNpmPublicationArtifact(options: {
         { name: "runtime-import", args: [], stdout: "" },
         { name: "help", args: helpArgs, stdout: help.stdout },
         { name: "version", args: versionArgs, stdout: version.stdout },
-        { name: "lookup", args: lookupArgs, stdout: lookup.stdout },
+        { name: "check", args: checkArgs, stdout: check.stdout },
         { name: "schema", args: schemaArgs, stdout: schema.stdout },
+        { name: "journeys", args: [], stdout: journeys.stdout },
       ],
     };
     try {

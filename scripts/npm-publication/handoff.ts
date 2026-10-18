@@ -280,21 +280,28 @@ function isCanonicalPackageFilePath(value: string): boolean {
   );
 }
 
-const ticket09ReceiptFilePaths = [
+export const publicationArtifactFiles = [
   "package/CHANGELOG.md",
   "package/LICENSE",
   "package/README.md",
   "package/dist/cli-command-identity.js",
   "package/dist/cli.js",
+  "package/dist/config-schema.js",
+  "package/dist/contracts.js",
+  "package/dist/engine.js",
+  "package/dist/graph.js",
+  "package/dist/json-value.js",
   "package/dist/main.js",
   "package/dist/standard-schema.js",
+  "package/dist/types.js",
   "package/package.json",
+  "package/ticket-graph.schema.json",
 ] as const;
 
 function hasCanonicalReceiptFiles(files: Receipt["files"]): boolean {
   if (
-    files.length !== ticket09ReceiptFilePaths.length ||
-    files.some((file, index) => file.path !== ticket09ReceiptFilePaths[index])
+    files.length !== publicationArtifactFiles.length ||
+    files.some((file, index) => file.path !== publicationArtifactFiles[index])
   ) {
     return false;
   }
@@ -317,18 +324,18 @@ function hasCanonicalReceiptFiles(files: Receipt["files"]): boolean {
 }
 
 /** 发布消费检查与交接校验共用原生结果的业务判据。 */
-export function hasLookupEvidence(source: string): boolean {
+export function hasCheckEvidence(source: string): boolean {
   try {
     const result: unknown = JSON.parse(source);
     return (
       isRecord(result) &&
       result.schemaVersion === "1" &&
-      result.command === "lookup" &&
+      result.command === "check" &&
       result.kind === "data" &&
-      result.variant === "found" &&
+      result.variant === "checked" &&
       isRecord(result.data) &&
-      result.data.name === "ada" &&
-      result.data.title === "Ada Lovelace"
+      result.data.valid === true &&
+      result.data.total === 1
     );
   } catch {
     return false;
@@ -357,25 +364,27 @@ export function hasSchemaEvidence(
       typeof manifest.root !== "string"
     )
       return false;
-    const root = manifest.commands[manifest.root];
-    const lookup = manifest.commands.lookup;
+    const commands = manifest.commands;
+    const root = commands[manifest.root];
     const schema = manifest.commands.schema;
     return (
       isRecord(root) &&
       root.name === commandName &&
       isRecord(schema) &&
       schema.name === "schema" &&
-      isRecord(lookup) &&
-      lookup.name === "lookup" &&
-      isRecord(lookup.input) &&
-      isRecord(lookup.input.inputSchema) &&
-      isRecord(lookup.success) &&
-      isRecord(lookup.success.variants) &&
-      isRecord(lookup.success.variants.found) &&
-      lookup.success.variants.found.exitCode === 0 &&
-      isRecord(lookup.failures) &&
-      isRecord(lookup.failures.notFound) &&
-      lookup.failures.notFound.exitCode === 1
+      ["init", "check", "list", "setStatus", "setDeps", "history"].every(
+        (name) => {
+          const command = commands[name];
+          return (
+            isRecord(command) &&
+            isRecord(command.input) &&
+            isRecord(command.input.inputSchema) &&
+            isRecord(command.failures) &&
+            isRecord(command.failures.rejected) &&
+            command.failures.rejected.exitCode === 1
+          );
+        },
+      )
     );
   } catch {
     return false;
@@ -383,27 +392,31 @@ export function hasSchemaEvidence(
 }
 
 function hasStableSmokeEvidence(receipt: Receipt): boolean {
-  const [runtimeImport, help, version, lookup, schema] = receipt.smokes;
+  const [runtimeImport, help, version, check, schema, journeys] =
+    receipt.smokes;
   return (
-    receipt.smokes.length === 5 &&
+    receipt.smokes.length === 6 &&
     runtimeImport?.name === "runtime-import" &&
     sameArguments(runtimeImport.args, []) &&
     runtimeImport.stdout === "" &&
     help?.name === "help" &&
     sameArguments(help.args, ["--help"]) &&
     help.stdout.includes(receipt.publication.commandName) &&
-    help.stdout.includes("lookup") &&
+    help.stdout.includes("check") &&
     help.stdout.includes("schema") &&
     version?.name === "version" &&
     sameArguments(version.args, ["--version"]) &&
     version.stdout ===
       `${receipt.publication.commandName} ${receipt.publication.version}\n` &&
-    lookup?.name === "lookup" &&
-    sameArguments(lookup.args, ["lookup", "ada"]) &&
-    hasLookupEvidence(lookup.stdout) &&
+    check?.name === "check" &&
+    sameArguments(check.args, ["check", "--config", "ticket-graph.json"]) &&
+    hasCheckEvidence(check.stdout) &&
     schema?.name === "schema" &&
     sameArguments(schema.args, ["schema"]) &&
-    hasSchemaEvidence(schema.stdout, receipt.publication.commandName)
+    hasSchemaEvidence(schema.stdout, receipt.publication.commandName) &&
+    journeys?.name === "journeys" &&
+    sameArguments(journeys.args, []) &&
+    journeys.stdout.includes("安装包通过同一票图旅程")
   );
 }
 
