@@ -103,6 +103,13 @@ function parseJson(value: string, code: string): unknown {
   }
 }
 
+function parseViewResult(source: string, code: string): unknown {
+  const results = parseJson(source, code);
+  if (!Array.isArray(results) || results.length !== 1)
+    fail(code, "expected exactly one npm view result");
+  return results[0];
+}
+
 function stringValue(value: unknown, code: string): string {
   if (typeof value !== "string" || value.length === 0)
     fail(code, "expected string");
@@ -284,7 +291,9 @@ export async function runDirectOidcPublication(
       "registry-preflight-failed",
     );
     const latest = (
-      parseJson(latestRaw, "registry-preflight-failed") as { latest?: unknown }
+      parseViewResult(latestRaw, "registry-preflight-failed") as {
+        latest?: unknown;
+      }
     ).latest;
     if (typeof latest !== "string" || !isStableSemver(semver, latest))
       fail("latest-invalid", "daily lane needs stable latest");
@@ -319,7 +328,7 @@ export async function runDirectOidcPublication(
       fail("fresh-version-exists", "fresh run cannot reuse a version");
     if (exactExists && attempt > 1) {
       const integrity = stringValue(
-        parseJson(exact.stdout, "rerun-integrity-conflict"),
+        parseViewResult(exact.stdout, "rerun-integrity-conflict"),
         "rerun-integrity-conflict",
       );
       if (integrity !== receipt.artifact.integrity)
@@ -367,10 +376,10 @@ export async function runDirectOidcPublication(
       await setTimeout(15_000);
     }
     const readIntegrity = stringValue(
-      parseJson(visible.stdout, "postwrite-integrity-conflict"),
+      parseViewResult(visible.stdout, "postwrite-integrity-conflict"),
       "postwrite-integrity-conflict",
     );
-    const postTags = parseJson(
+    const postTags = parseViewResult(
       await command(
         run,
         options.repositoryRoot,
