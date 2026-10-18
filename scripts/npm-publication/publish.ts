@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, lstat, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout } from "node:timers/promises";
 
 import {
   acceptDownloadedPublicationArtifact,
@@ -338,23 +339,35 @@ export async function runDirectOidcPublication(
         "publish-failed",
       );
     }
-    const readIntegrity = stringValue(
-      parseJson(
-        await command(
-          run,
-          options.repositoryRoot,
-          env,
-          [
-            ...common,
-            "view",
-            `${publication.packageName}@${publication.version}`,
-            "dist.integrity",
-            "--json",
-          ],
+    // npm 受理发布后可能仍在处理索引；只等待明确的未找到结果。
+    const visibilityDeadline = Date.now() + 10 * 60_000;
+    let visible: ProcessResult;
+    for (;;) {
+      visible = await run(
+        "corepack",
+        [
+          "pnpm",
+          "exec",
+          "npm",
+          ...common,
+          "view",
+          `${publication.packageName}@${publication.version}`,
+          "dist.integrity",
+          "--json",
+        ],
+        { cwd: options.repositoryRoot, env },
+      );
+      if (visible.exitCode === 0) break;
+      if (!isExplicitNotFound(visible) || Date.now() >= visibilityDeadline)
+        fail(
           "postwrite-integrity-conflict",
-        ),
-        "postwrite-integrity-conflict",
-      ),
+          "published version is not visible in the registry",
+        );
+      console.log("npm 正在处理已发布版本，等待索引就绪。");
+      await setTimeout(15_000);
+    }
+    const readIntegrity = stringValue(
+      parseJson(visible.stdout, "postwrite-integrity-conflict"),
       "postwrite-integrity-conflict",
     );
     const postTags = parseJson(

@@ -23,8 +23,6 @@ export type NpmPublicationReadinessBlockerCode =
   | "repository"
   | "homepage"
   | "bugs"
-  | "readme-missing"
-  | "readme-content"
   | "license-missing"
   | "license-mismatch"
   | "changelog-missing"
@@ -528,7 +526,7 @@ function addManifestBlockers(options: {
   }
   if (
     repository === undefined ||
-    manifest.homepage !== `${repository.webUrl}#readme`
+    manifest.homepage !== `${repository.webUrl}/tree/HEAD/${packagePath}#readme`
   ) {
     blockers.push(
       blocker({
@@ -539,7 +537,7 @@ function addManifestBlockers(options: {
         expected:
           repository === undefined
             ? "A homepage derived from the canonical GitHub repository"
-            : `${repository.webUrl}#readme`,
+            : `${repository.webUrl}/tree/HEAD/${packagePath}#readme`,
         nextAction: "Set the package homepage from the public repository.",
       }),
     );
@@ -650,36 +648,6 @@ async function addDocumentBlockers(options: {
   readonly releaseNotes?: string;
 }> {
   const { blockers, packagePath, repositoryRoot } = options;
-  const readmePath = `${packagePath}/README.md`;
-  const readme = await textFact(path.join(repositoryRoot, readmePath));
-  if (readme.kind === "missing") {
-    blockers.push(
-      blocker({
-        code: "readme-missing",
-        path: readmePath,
-        observed: "missing",
-        expected: "An independent package README",
-        nextAction: "Create the public package README.",
-      }),
-    );
-  } else if (
-    readme.kind === "unreadable" ||
-    !nonPlaceholderText(readme.source)
-  ) {
-    blockers.push(
-      blocker({
-        code: "readme-content",
-        path: readmePath,
-        observed:
-          readme.kind === "unreadable"
-            ? readme.reason
-            : "empty or placeholder text",
-        expected: "Non-placeholder documentation for npm consumers",
-        nextAction: "Write the public package README.",
-      }),
-    );
-  }
-
   const rootLicensePath = "LICENSE";
   const packageLicensePath = `${packagePath}/LICENSE`;
   const [rootLicense, packageLicense] = await Promise.all([

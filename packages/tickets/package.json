@@ -1,8 +1,8 @@
 {
   "name": "@ykdz/tickets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "本地 Markdown 票图管理命令行工具",
-  "homepage": "https://github.com/YKDZ/tickets#readme",
+  "homepage": "https://github.com/YKDZ/tickets/tree/HEAD/packages/tickets#readme",
   "bugs": {
     "url": "https://github.com/YKDZ/tickets/issues"
   },

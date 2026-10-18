@@ -643,9 +643,13 @@ export async function runImmutableGithubRelease(
       tag,
     });
 
-    if (context.runAttempt === 1) {
-      if (remoteTag !== undefined || remoteRelease !== undefined)
-        fail("fresh-release-conflict");
+    if (
+      context.runAttempt === 1 &&
+      (remoteTag !== undefined || remoteRelease !== undefined)
+    )
+      fail("fresh-release-conflict");
+    // 上游发布作业重跑后，本作业可能尚未创建任何远端对象。
+    if (remoteTag === undefined && remoteRelease === undefined) {
       await createTag({
         run,
         repositoryRoot: options.repositoryRoot,

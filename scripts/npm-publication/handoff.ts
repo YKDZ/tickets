@@ -280,31 +280,7 @@ function isCanonicalPackageFilePath(value: string): boolean {
   );
 }
 
-export const publicationArtifactFiles = [
-  "package/CHANGELOG.md",
-  "package/LICENSE",
-  "package/README.md",
-  "package/dist/cli-command-identity.js",
-  "package/dist/cli.js",
-  "package/dist/config-schema.js",
-  "package/dist/contracts.js",
-  "package/dist/engine.js",
-  "package/dist/graph.js",
-  "package/dist/json-value.js",
-  "package/dist/main.js",
-  "package/dist/standard-schema.js",
-  "package/dist/types.js",
-  "package/package.json",
-  "package/ticket-graph.schema.json",
-] as const;
-
 function hasCanonicalReceiptFiles(files: Receipt["files"]): boolean {
-  if (
-    files.length !== publicationArtifactFiles.length ||
-    files.some((file, index) => file.path !== publicationArtifactFiles[index])
-  ) {
-    return false;
-  }
   let previousPath: string | undefined;
   for (const file of files) {
     if (

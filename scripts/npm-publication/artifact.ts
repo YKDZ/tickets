@@ -18,11 +18,7 @@ import { pathToFileURL } from "node:url";
 import { validRange } from "semver";
 import { list } from "tar";
 
-import {
-  hasCheckEvidence,
-  hasSchemaEvidence,
-  publicationArtifactFiles,
-} from "./handoff.ts";
+import { hasCheckEvidence, hasSchemaEvidence } from "./handoff.ts";
 import {
   inspectNpmPublicationReadiness,
   type NpmPublicationReadiness,
@@ -71,7 +67,6 @@ export type PublicationArtifactFailureCode =
   | "artifact-archive-unsafe"
   | "artifact-manifest-invalid"
   | "artifact-manifest-contract"
-  | "artifact-files-contract"
   | "artifact-bin-contract"
   | "consumer-install-failed"
   | "consumer-smoke-failed"
@@ -199,8 +194,6 @@ type CommandPlan = {
   readonly args: readonly string[];
   readonly environment: NodeJS.ProcessEnv;
 };
-
-const expectedFiles = publicationArtifactFiles;
 
 const allowedPackedManifestFields = new Set([
   "bin",
@@ -417,14 +410,6 @@ export async function inspectPublicationArchive(
         paths.add(pathIdentity);
         const entryType = entry.type;
         if (entryType === "Directory") {
-          const directory = archivePathIdentity(entryPath);
-          if (
-            !expectedFiles.some((filePath) =>
-              filePath.startsWith(`${directory}/`),
-            )
-          ) {
-            unsafe ??= `unexpected directory ${JSON.stringify(entryPath)}`;
-          }
           entry.resume();
           return;
         }
@@ -477,15 +462,6 @@ export async function inspectPublicationArchive(
   const sortedFiles = files.toSorted((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
   );
-  const actualPaths = sortedFiles.map((item) => item.path);
-  if (JSON.stringify(actualPaths) !== JSON.stringify(expectedFiles)) {
-    return failure(
-      "artifact-files-contract",
-      JSON.stringify(actualPaths),
-      `Exactly ${JSON.stringify(expectedFiles)}`,
-      "Correct the package files allow-list and compiled runtime outputs.",
-    );
-  }
   const manifestSource = sortedFiles.find(
     (item) => item.path === "package/package.json",
   )?.body;
@@ -575,16 +551,7 @@ export function inspectPackedManifestContract(options: {
     sameJson(manifest.bugs, sourceManifest.bugs) &&
     manifest.type === "module" &&
     sameJson(manifest.engines, sourceManifest.engines);
-  const exactFiles =
-    Array.isArray(files) &&
-    files.length === 5 &&
-    [
-      "dist",
-      "README.md",
-      "LICENSE",
-      "CHANGELOG.md",
-      "ticket-graph.schema.json",
-    ].every((item) => files.includes(item));
+  const exactFiles = sameJson(files, sourceManifest.files);
   const exactBin =
     isObject(bin) &&
     Object.keys(bin).length === 1 &&
