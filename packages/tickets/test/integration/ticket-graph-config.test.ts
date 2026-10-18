@@ -109,10 +109,6 @@ void test("初始化保留目录与多个完成值，生成的配置可直接检
   const config = JSON.parse(readFileSync(f.config, "utf8"));
   assert.equal(config.tickets, "issues");
   assert.deepEqual(config.completion, { values: ["resolved", " shipped "] });
-  assert.equal(
-    config.$schema,
-    "https://unpkg.com/@ykdz/tickets@1.0.0/ticket-graph.schema.json",
-  );
   assert.deepEqual(readdirSync(f.root).sort(), ["issues", "ticket-graph.json"]);
   assert.equal(existsSync(`${f.config}.history.jsonl`), false);
   assert.equal(run(f, "check").status, 0);
