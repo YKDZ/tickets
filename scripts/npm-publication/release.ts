@@ -399,6 +399,7 @@ async function verifyAssetBytes(options: {
   readonly repositoryRoot: string;
   readonly context: ReleaseContext;
   readonly artifact: AcceptedPublicationArtifact;
+  readonly tag: string;
   readonly assets: readonly RemoteAsset[];
   readonly temporaryDirectory: string;
 }): Promise<void> {
@@ -413,12 +414,13 @@ async function verifyAssetBytes(options: {
     const result = await gh({
       ...options,
       arguments_: [
-        "api",
-        "--method",
-        "GET",
-        "-H",
-        "Accept: application/octet-stream",
-        `repos/${options.context.repository}/releases/assets/${asset.id}`,
+        "release",
+        "download",
+        options.tag,
+        "--repo",
+        options.context.repository,
+        "--pattern",
+        asset.name,
         `--output=${destination}`,
       ],
     });
@@ -730,6 +732,7 @@ export async function runImmutableGithubRelease(
         repositoryRoot: options.repositoryRoot,
         context,
         artifact,
+        tag,
         assets: draftAssets,
         temporaryDirectory,
       });
