@@ -6,7 +6,7 @@
 pnpm dlx @ykdz/tickets@latest --help
 ```
 
-完整命令、票文件格式和失败处理见[使用说明](packages/tickets/README.md)，版本变化见[更新日志](packages/tickets/CHANGELOG.md)，发布流程见[发布说明](RELEASING.md)。
+完整命令、票文件格式和失败处理见[使用说明](packages/tickets/README.md)，版本变化见[更新日志](packages/tickets/CHANGELOG.md)，后续版本通过 [release.yml](.github/workflows/release.yml) 发布。
 
 开发使用工作区指定的 Node.js 和 pnpm 版本：
 
