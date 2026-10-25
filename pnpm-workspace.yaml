@@ -27,7 +27,7 @@ catalog:
   "@types/spdx-expression-parse": ^4.0.0
   "@valibot/to-json-schema": ^1.8.0
   "@ykdz/cli-contract": 0.2.1
-  "npm": 12.2.0
+  "npm": 12.2.1
   "oxfmt": ^0.71.0
   "oxlint": ^1.77.0
   "oxlint-tsgolint": ^7.0.2001
