@@ -177,8 +177,8 @@ catalogs:
       specifier: ^1.8.0
       version: 1.8.0
     '@ykdz/cli-contract':
-      specifier: 0.2.1
-      version: 0.2.1
+      specifier: 0.3.0
+      version: 0.3.0
     npm:
       specifier: 12.2.0
       version: 12.2.0
@@ -266,7 +266,7 @@ importers:
         version: 1.8.0(valibot@1.5.0(typescript@7.0.2))
       '@ykdz/cli-contract':
         specifier: 'catalog:'
-        version: 0.2.1
+        version: 0.3.0
       valibot:
         specifier: 'catalog:'
         version: 1.5.0(typescript@7.0.2)
@@ -749,8 +749,8 @@ packages:
     peerDependencies:
       valibot: ^1.5.0
 
-  '@ykdz/cli-contract@0.2.1':
-    resolution: {integrity: sha512-1cp3+qQNHOW0fuIWOjkU5ozQbbTAuSqd7AAgqHp2Hs/p63b8oFOUzurgnrwAucWoVil7r2gkplB0klZg57dMRA==}
+  '@ykdz/cli-contract@0.3.0':
+    resolution: {integrity: sha512-0SYE3OHjAmDpqS54yPOUgBqkF6ywJ5CNZ86BACGAWpMx9q5+m8au8xx2SyLoj956SjqrkzOtzUujQ2MvlThivQ==}
     engines: {node: '>=24'}
 
   ajv@8.20.0:
@@ -1170,7 +1170,7 @@ snapshots:
     dependencies:
       valibot: 1.5.0(typescript@7.0.2)
 
-  '@ykdz/cli-contract@0.2.1':
+  '@ykdz/cli-contract@0.3.0':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/node': 24.19.2
