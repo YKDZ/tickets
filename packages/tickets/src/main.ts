@@ -6,7 +6,7 @@ import {
 } from "@ykdz/cli-contract";
 
 import type { CliCommandIdentity } from "./cli-command-identity.ts";
-import { createCliContract } from "./contracts.ts";
+import { createCliContract, describeEffects } from "./contracts.ts";
 import type { Effects } from "./types.ts";
 
 export type CliRuntime = {
@@ -22,13 +22,19 @@ export async function runCli(runtime: CliRuntime): Promise<number> {
     ticketSaved: false,
     historySaved: false,
   };
+  let textOutput = false;
   try {
     const contract = createCliContract(runtime.identity);
-    const result = await executeCli(contract, {
-      invocation: parseCliInvocation(contract, runtime.argv.slice(2)),
-      dependencies: { effects, getManifest: () => ({ ...contract.manifest }) },
-      write: runtime.write,
-    });
+    const invocation = parseCliInvocation(contract, runtime.argv.slice(2));
+    textOutput =
+      invocation.kind === "parsed" && invocation.outputMode === "text";
+    const result = await (invocation.kind === "parsed"
+      ? executeCli(contract, {
+          invocation,
+          dependencies: { effects },
+          write: runtime.write,
+        })
+      : executeCli(contract, { invocation, write: runtime.write }));
     return result.exitCode;
   } catch (error) {
     const diagnostic = {
@@ -37,8 +43,8 @@ export async function runCli(runtime: CliRuntime): Promise<number> {
           error instanceof CliWriteError ? "OUTPUT_FAILED" : "INTERNAL_ERROR",
         message:
           error instanceof CliWriteError
-            ? "结果未完整输出；已发生的修改仍然有效。"
-            : "命令执行异常。",
+            ? "Output was interrupted. Changes already saved still apply."
+            : "Command execution failed.",
         ...(error instanceof Error ? { cause: error.message } : {}),
       },
       effects,
@@ -46,10 +52,12 @@ export async function runCli(runtime: CliRuntime): Promise<number> {
     try {
       await runtime.write({
         destination: "stderr",
-        chunk: `${JSON.stringify(diagnostic)}\n`,
+        chunk: textOutput
+          ? `${[diagnostic.error.message, ...describeEffects(effects)].join("\n")}\n`
+          : `${JSON.stringify(diagnostic)}\n`,
       });
     } catch {
-      // 诊断通道故障不能改变失败退出码。
+      // Preserve the failure exit code if diagnostics cannot be written.
     }
     return 1;
   }

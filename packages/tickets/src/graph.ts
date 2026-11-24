@@ -26,7 +26,11 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     const opening = /^\uFEFF?---[ \t]*\r?\n/.exec(source.text);
     if (!opening) {
       issues.push(
-        issue(source, "MISSING_FRONTMATTER", "票文件首部缺少 YAML 文件头。"),
+        issue(
+          source,
+          "MISSING_FRONTMATTER",
+          "The ticket must start with YAML front matter.",
+        ),
       );
       return empty;
     }
@@ -34,7 +38,11 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     const closing = /^---[ \t]*(?:\r?\n|$)/m.exec(source.text.slice(offset));
     if (!closing) {
       issues.push(
-        issue(source, "UNCLOSED_FRONTMATTER", "YAML 文件头缺少结束分隔行。"),
+        issue(
+          source,
+          "UNCLOSED_FRONTMATTER",
+          "The YAML front matter is missing its closing delimiter.",
+        ),
       );
       return empty;
     }
@@ -48,18 +56,23 @@ export function inspect(sources: TicketSource[], completion: Completion) {
       if (error.code === "DUPLICATE_KEY") {
         duplicates.add(field);
         issues.push(
-          issue(source, "DUPLICATE_FIELD", `YAML 字段 ${field} 重复。`, {
+          issue(source, "DUPLICATE_FIELD", `Duplicate YAML field ${field}.`, {
             ...(field === undefined ? {} : { field }),
             offset: offset + error.pos[0],
           }),
         );
       } else {
         issues.push(
-          issue(source, "INVALID_YAML", `YAML 文件头损坏：${error.code}。`, {
-            ...(field === undefined ? {} : { field }),
-            offset: offset + error.pos[0],
-            reason: error.code,
-          }),
+          issue(
+            source,
+            "INVALID_YAML",
+            `Invalid YAML front matter: ${error.code}.`,
+            {
+              ...(field === undefined ? {} : { field }),
+              offset: offset + error.pos[0],
+              reason: error.code,
+            },
+          ),
         );
       }
     }
@@ -68,7 +81,11 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     }
     if (!isMap(document.contents)) {
       issues.push(
-        issue(source, "INVALID_FRONTMATTER", "YAML 文件头必须是映射。"),
+        issue(
+          source,
+          "INVALID_FRONTMATTER",
+          "YAML front matter must be a mapping.",
+        ),
       );
       return empty;
     }
@@ -81,7 +98,9 @@ export function inspect(sources: TicketSource[], completion: Completion) {
       const node = document.get(field, true) as ParsedNode | undefined;
       if (!node) {
         issues.push(
-          issue(source, "MISSING_FIELD", `缺少必需字段 ${field}。`, { field }),
+          issue(source, "MISSING_FIELD", `Missing required field ${field}.`, {
+            field,
+          }),
         );
         continue;
       }
@@ -90,7 +109,7 @@ export function inspect(sources: TicketSource[], completion: Completion) {
           issue(
             source,
             "UNSAFE_FIELD",
-            `字段 ${field} 使用锚点、别名或标签，无法单独安全修改。`,
+            `Field ${field} uses an anchor, alias, or tag that prevents a safe isolated edit.`,
             { field },
           ),
         );
@@ -101,7 +120,7 @@ export function inspect(sources: TicketSource[], completion: Completion) {
           issue(
             source,
             "UNSAFE_FIELD",
-            `字段 ${field} 的旧值无法被 JSON 历史完整记录。`,
+            `The previous value of ${field} cannot be preserved in JSON history.`,
             { field },
           ),
         );
@@ -150,9 +169,14 @@ export function inspect(sources: TicketSource[], completion: Completion) {
           status = node.value;
         else
           issues.push(
-            issue(source, "INVALID_FIELD", `字段 ${field} 必须是非空字符串。`, {
-              field,
-            }),
+            issue(
+              source,
+              "INVALID_FIELD",
+              `Field ${field} must be a nonblank string.`,
+              {
+                field,
+              },
+            ),
           );
       } else if (
         isSeq(node) &&
@@ -169,7 +193,7 @@ export function inspect(sources: TicketSource[], completion: Completion) {
           issue(
             source,
             "INVALID_FIELD",
-            `字段 ${field} 必须是票标识字符串数组。`,
+            `Field ${field} must be an array of ticket ID strings.`,
             { field },
           ),
         );
@@ -193,7 +217,11 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     if (matches.length > 1) {
       for (const ticket of matches)
         issues.push(
-          issue(ticket, "DUPLICATE_ID", `票标识 ${ticket.id} 对应多个文件。`),
+          issue(
+            ticket,
+            "DUPLICATE_ID",
+            `Ticket ID ${ticket.id} appears in multiple files.`,
+          ),
         );
     }
   }
@@ -202,17 +230,22 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     for (const target of new Set(ticket.blocked_by)) {
       if (target === ticket.id) {
         issues.push(
-          issue(ticket, "SELF_DEPENDENCY", `票 ${ticket.id} 依赖自身。`, {
-            field: "blocked_by",
-            target,
-          }),
+          issue(
+            ticket,
+            "SELF_DEPENDENCY",
+            `Ticket ${ticket.id} depends on itself.`,
+            {
+              field: "blocked_by",
+              target,
+            },
+          ),
         );
       } else if (!byId.has(target)) {
         issues.push(
           issue(
             ticket,
             "MISSING_REFERENCE",
-            `票 ${ticket.id} 的前置票 ${target} 不存在。`,
+            `Ticket ${ticket.id} refers to missing prerequisite ${target}.`,
             { field: "blocked_by", target },
           ),
         );
@@ -245,7 +278,7 @@ export function inspect(sources: TicketSource[], completion: Completion) {
     const problem = issue(
       source,
       "CYCLE",
-      `依赖形成环：${path.join(" → ")}。`,
+      `Dependency cycle: ${path.join(" → ")}.`,
       { field: "blocked_by", path },
     );
     problem.key = JSON.stringify(["CYCLE", component]);
@@ -361,7 +394,9 @@ function cyclePath(
       }
     }
   }
-  throw new Error("强连通分量中未找到依赖环。");
+  throw new Error(
+    "Could not find a dependency cycle in the strongly connected component.",
+  );
 }
 
 function fieldAt(
@@ -434,7 +469,7 @@ export function replaceValue(ticket: Ticket, field: Field, value: JsonValue) {
     node.end < node.start ||
     node.end > ticket.text.length
   ) {
-    throw Object.assign(new Error(`无法安全修改字段 ${field}。`), {
+    throw Object.assign(new Error(`Could not safely update field ${field}.`), {
       code: "UNEDITABLE_FIELD",
       ticket: ticket.id,
       file: ticket.file,

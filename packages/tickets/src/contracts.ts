@@ -1,11 +1,11 @@
 import {
   defineCli,
   helpCapability,
-  outputCapability,
+  schemaCapability,
   versionCapability,
   text,
 } from "@ykdz/cli-contract";
-import * as v from "valibot";
+import { z } from "zod";
 
 import type { CliCommandIdentity } from "./cli-command-identity.ts";
 import {
@@ -19,167 +19,172 @@ import {
   withLock,
 } from "./engine.ts";
 import { jsonValueSchema } from "./json-value.ts";
-import { standardSchema } from "./standard-schema.ts";
 import type { Effects } from "./types.ts";
 
-const string = v.string();
-const id = v.pipe(v.string(), v.regex(/^[0-9]+$/));
-const nonblank = v.pipe(v.string(), v.regex(/\S/));
+const string = z.string();
+const id = z.string().regex(/^[0-9]+$/);
+const nonblank = z.string().regex(/\S/);
 const configField = {
   kind: "valueOption",
   longOption: "--config",
-  description: "票集配置文件",
+  description: "Ticket set configuration file",
 } as const;
-const scope = v.strictObject({ config: string, tickets: string });
-const issue = v.strictObject({
+const scope = z.strictObject({ config: string, tickets: string });
+const issue = z.strictObject({
   code: string,
   message: string,
   ticket: string,
   file: string,
   key: string,
-  field: v.optional(string),
-  target: v.optional(string),
-  reason: v.optional(string),
-  offset: v.optional(v.number()),
-  path: v.optional(v.array(string)),
+  field: string.optional(),
+  target: string.optional(),
+  reason: string.optional(),
+  offset: z.number().optional(),
+  path: z.array(string).optional(),
 });
 const changeFields = {
   ticket: id,
-  field: v.picklist(["status", "blocked_by"]),
-  before: v.optional(jsonValueSchema),
-  after: v.union([string, v.array(id)]),
-  changed: v.boolean(),
-  state: v.picklist(["unchanged", "saved", "failed", "notExecuted"]),
-  ticketSaved: v.boolean(),
-  historySaved: v.union([v.boolean(), v.null()]),
+  field: z.enum(["status", "blocked_by"]),
+  before: jsonValueSchema.optional(),
+  after: z.union([string, z.array(id)]),
+  changed: z.boolean(),
+  state: z.enum(["unchanged", "saved", "failed", "notExecuted"]),
+  ticketSaved: z.boolean(),
+  historySaved: z.union([z.boolean(), z.null()]),
 };
-export const changeSchema = v.strictObject(changeFields);
-const effectSchema = v.strictObject({
-  configCreated: v.boolean(),
-  configSaved: v.union([v.boolean(), v.null()]),
-  ticketSaved: v.optional(v.boolean()),
-  historySaved: v.optional(v.union([v.boolean(), v.null()])),
-  ticket: v.optional(id),
-  field: v.optional(v.picklist(["status", "blocked_by"])),
-  before: v.optional(jsonValueSchema),
-  after: v.optional(jsonValueSchema),
-  results: v.optional(v.array(changeSchema)),
+export const changeSchema = z.strictObject(changeFields);
+const effectSchema = z.strictObject({
+  configCreated: z.boolean(),
+  configSaved: z.union([z.boolean(), z.null()]),
+  ticketSaved: z.boolean().optional(),
+  historySaved: z.union([z.boolean(), z.null()]).optional(),
+  ticket: id.optional(),
+  field: z.enum(["status", "blocked_by"]).optional(),
+  before: jsonValueSchema.optional(),
+  after: jsonValueSchema.optional(),
+  results: z.array(changeSchema).optional(),
 });
-export const failureSchema = v.strictObject({
-  error: v.strictObject({
+export const failureSchema = z.strictObject({
+  error: z.strictObject({
     code: string,
     message: string,
-    file: v.optional(string),
-    cause: v.optional(string),
-    ticket: v.optional(id),
-    target: v.optional(id),
-    field: v.optional(string),
-    files: v.optional(v.array(string)),
-    line: v.optional(v.number()),
-    scope: v.optional(scope),
-    issues: v.optional(
-      v.array(
-        v.union([
+    file: string.optional(),
+    cause: string.optional(),
+    ticket: id.optional(),
+    target: id.optional(),
+    field: string.optional(),
+    files: z.array(string).optional(),
+    line: z.number().optional(),
+    scope: scope.optional(),
+    issues: z
+      .array(
+        z.union([
           issue,
-          v.strictObject({ path: string, keyword: string, message: string }),
+          z.strictObject({ path: string, keyword: string, message: string }),
         ]),
-      ),
-    ),
+      )
+      .optional(),
   }),
   effects: effectSchema,
 });
 
 export const inputs = {
-  init: v.strictObject({
+  init: z.strictObject({
     config: string,
     tickets: string,
-    completionValues: v.pipe(v.array(string), v.minLength(1)),
+    completionValues: z.array(string).min(1),
   }),
-  check: v.strictObject({ config: string }),
-  list: v.strictObject({
+  check: z.strictObject({ config: string }),
+  list: z.strictObject({
     config: string,
-    filter: v.optional(v.picklist(["all", "unblocked", "blocked"])),
+    filter: z.enum(["all", "unblocked", "blocked"]).optional(),
   }),
-  setStatus: v.strictObject({
+  setStatus: z.strictObject({
     config: string,
-    tickets: v.pipe(v.array(id), v.minLength(1)),
+    tickets: z.array(id).min(1),
     status: nonblank,
   }),
-  setDeps: v.pipe(
-    v.strictObject({
-      config: string,
-      ticket: id,
-      dependencies: v.optional(v.pipe(v.array(id), v.minLength(1))),
-      clear: v.optional(v.literal(true)),
-    }),
-    v.check(
-      (value) =>
-        Object.hasOwn(value, "dependencies") !== Object.hasOwn(value, "clear"),
-      "必须且只能提供 dependencies、clear 中的一项。",
-    ),
-  ),
-  history: v.strictObject({ config: string, ticket: v.optional(id) }),
+  setDeps: z.strictObject({
+    config: string,
+    ticket: id,
+    dependencies: z.array(id).min(1).optional(),
+    clear: z.literal(true).optional(),
+  }),
+  history: z.strictObject({ config: string, ticket: id.optional() }),
 };
 
 const commonUpdate = {
   scope,
   history: string,
-  valid: v.boolean(),
-  issues: v.array(issue),
+  valid: z.boolean(),
+  issues: z.array(issue),
 };
 export const outputs = {
-  init: v.strictObject({ scope, created: v.boolean() }),
-  check: v.strictObject({ scope, valid: v.boolean(), total: v.number() }),
-  list: v.strictObject({
+  init: z.strictObject({ scope, created: z.boolean() }),
+  check: z.strictObject({ scope, valid: z.boolean(), total: z.number() }),
+  list: z.strictObject({
     scope,
-    filter: v.picklist(["all", "unblocked", "blocked"]),
-    total: v.number(),
-    tickets: v.array(
-      v.strictObject({
+    filter: z.enum(["all", "unblocked", "blocked"]),
+    total: z.number(),
+    tickets: z.array(
+      z.strictObject({
         id,
         file: string,
         status: string,
-        delivery_complete: v.boolean(),
-        blocked_by: v.array(id),
-        blocked_by_unfinished: v.array(id),
+        delivery_complete: z.boolean(),
+        blocked_by: z.array(id),
+        blocked_by_unfinished: z.array(id),
       }),
     ),
   }),
-  setStatus: v.strictObject({
+  setStatus: z.strictObject({
     ...commonUpdate,
-    results: v.array(changeSchema),
+    results: z.array(changeSchema),
   }),
-  setDeps: v.strictObject({ ...commonUpdate, ...changeFields }),
-  history: v.strictObject({
-    scope: v.strictObject({
+  setDeps: z.strictObject({ ...commonUpdate, ...changeFields }),
+  history: z.strictObject({
+    scope: z.strictObject({
       config: string,
       history: string,
-      ticket: v.union([id, v.null()]),
+      ticket: z.union([id, z.null()]),
     }),
-    events: v.array(
-      v.objectWithRest(
-        {
-          ticket: id,
-          field: string,
-          time: string,
-          before: jsonValueSchema,
-          after: jsonValueSchema,
-        },
-        v.unknown(),
-      ),
+    events: z.array(
+      z.looseObject({
+        ticket: id,
+        field: string,
+        time: string,
+        before: jsonValueSchema,
+        after: jsonValueSchema,
+      }),
     ),
   }),
 };
 
+function preserveJsonOutput<Schema extends z.ZodType>(
+  schema: Schema,
+): { "~standard": Schema["~standard"] } {
+  return {
+    "~standard": {
+      ...schema["~standard"],
+      validate(value: unknown) {
+        const result = schema.safeParse(value);
+        // Zod drops own __proto__ keys when rebuilding objects. Keep the validated JSON intact.
+        return result.success
+          ? { value: value as z.output<Schema> }
+          : { issues: result.error.issues };
+      },
+    },
+  };
+}
+
 interface Dependencies {
   effects: Effects;
-  getManifest(): Record<string, unknown>;
 }
 const define = defineCli<Dependencies>();
 const failures = {
   rejected: {
-    description: "执行失败及实际写入效果",
-    schema: standardSchema(failureSchema),
+    description: "Execution failure and saved changes",
+    schema: preserveJsonOutput(failureSchema),
     exitCode: 1,
   },
 } as const;
@@ -188,263 +193,489 @@ async function attempt<T>(
   effects: Effects,
   action: () => T | Promise<T>,
 ): Promise<
-  | { ok: true; data: T }
-  | { ok: false; data: v.InferOutput<typeof failureSchema> }
+  { ok: true; data: T } | { ok: false; data: z.output<typeof failureSchema> }
 > {
   try {
     return { ok: true, data: await action() };
   } catch (error) {
     if (!(error instanceof Failure)) throw error;
-    // 省略内部错误中不存在的可选信息，保留旧值的 JSON 类型。
+    // Omit absent error details while preserving the JSON types of previous values.
     const data: unknown = JSON.parse(
       JSON.stringify({ error: error.details, effects }),
     );
-    if (!v.is(failureSchema, data))
-      throw new Error("执行错误不符合票图失败契约。", { cause: error });
-    return { ok: false, data };
+    const parsed = failureSchema.safeParse(data);
+    if (!parsed.success)
+      throw new Error(
+        "The error does not match the ticket graph failure contract.",
+        { cause: error },
+      );
+    return { ok: false, data: data as z.output<typeof failureSchema> };
   }
+}
+
+function describeChange(change: z.output<typeof changeSchema>): string {
+  if (change.state === "unchanged")
+    return `Ticket ${change.ticket}: unchanged.`;
+  if (change.state === "notExecuted")
+    return `Ticket ${change.ticket}: not attempted.`;
+  return describeTicketSave(
+    change.ticket,
+    change.ticketSaved,
+    change.historySaved,
+  );
+}
+
+function describeTicketSave(
+  ticket: string,
+  ticketSaved?: boolean,
+  historySaved?: boolean | null,
+): string {
+  const history =
+    historySaved === null
+      ? "could not confirm the write"
+      : historySaved
+        ? "saved"
+        : "not saved";
+  return `Ticket ${ticket}: ${ticketSaved ? "saved" : "not saved"}. History: ${history}.`;
+}
+
+export function describeEffects(
+  effects: z.output<typeof effectSchema>,
+): string[] {
+  if (effects.results !== undefined) return effects.results.map(describeChange);
+  if (effects.configCreated) {
+    return [
+      effects.configSaved
+        ? "Configuration saved."
+        : "Configuration created. Its contents could not be confirmed.",
+    ];
+  }
+  if (effects.ticket === undefined) return [];
+  return [
+    describeTicketSave(
+      effects.ticket,
+      effects.ticketSaved,
+      effects.historySaved,
+    ),
+  ];
+}
+
+function describeFailure({ error, effects }: z.output<typeof failureSchema>) {
+  return text.lines([
+    error.message,
+    ...(error.issues ?? []).map(({ message }) => message),
+    ...describeEffects(effects),
+  ]);
 }
 
 const init = define.command("init")({
   kind: "command",
   parent: "ticketGraph",
   name: "init",
-  description: "创建配置，不覆盖已有文件；创建后用 check 检查票图。",
+  description:
+    "Create a configuration file. Run check to validate the ticket graph.",
   fields: {
     config: configField,
     tickets: {
       kind: "valueOption",
       longOption: "--tickets",
-      description: "票目录，相对配置文件解析",
+      description: "Ticket directory relative to the configuration file",
     },
     completionValues: {
       kind: "repeatableOption",
       longOption: "--completion-value",
-      description: "项目完成值，可重复提供",
+      description: "Completion value. Repeat for multiple values.",
     },
   },
-  input: standardSchema(inputs.init),
-  success: {
-    kind: "data",
-    variants: {
-      created: {
-        description: "已创建配置",
-        schema: standardSchema(outputs.init),
-        exitCode: 0,
+  input: inputs.init,
+  examples: [
+    {
+      input: {
+        config: "ticket-graph.json",
+        tickets: "issues",
+        completionValues: ["done"],
       },
     },
-  },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, () =>
-      initialize(
-        {
-          config: input.config,
-          tickets: input.tickets,
-          "completion-value": input.completionValues,
+  ],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          created: {
+            description: "Configuration created",
+            schema: outputs.init,
+            exitCode: 0,
+          },
         },
-        dependencies.effects,
-      ),
-    );
-    return result.ok
-      ? outcome.data.created(result.data)
-      : outcome.failure.rejected(result.data);
+      },
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, () =>
+          initialize(
+            {
+              config: input.config,
+              tickets: input.tickets,
+              "completion-value": input.completionValues,
+            },
+            dependencies.effects,
+          ),
+        );
+        return result.ok
+          ? outcome.data.created(result.data)
+          : outcome.failure.rejected(result.data);
+      },
+    });
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            created: ({ scope }) =>
+              text.line(`Created configuration at ${scope.config}.`),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 const checkCommand = define.command("check")({
   kind: "command",
   parent: "ticketGraph",
   name: "check",
-  description: "检查字段、引用、自依赖和环。",
+  description:
+    "Check ticket fields and dependencies for invalid references and cycles.",
   fields: { config: configField },
-  input: standardSchema(inputs.check),
-  success: {
-    kind: "data",
-    variants: {
-      checked: {
-        description: "票图检查结果",
-        schema: standardSchema(outputs.check),
-        exitCode: 0,
+  input: inputs.check,
+  examples: [{ input: { config: "ticket-graph.json" } }],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          checked: {
+            description: "Ticket graph check result",
+            schema: outputs.check,
+            exitCode: 0,
+          },
+        },
       },
-    },
-  },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, () =>
-      check(configuration(input.config)),
-    );
-    return result.ok
-      ? outcome.data.checked(result.data)
-      : outcome.failure.rejected(result.data);
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, () =>
+          check(configuration(input.config)),
+        );
+        return result.ok
+          ? outcome.data.checked(result.data)
+          : outcome.failure.rejected(result.data);
+      },
+    });
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            checked: ({ total }) =>
+              text.line(`Checked ${total} tickets. The ticket graph is valid.`),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 const listCommand = define.command("list")({
   kind: "command",
   parent: "ticketGraph",
   name: "list",
-  description: "查询票，前置是否满足不代表实施顺序。",
+  description: "List tickets and their outstanding prerequisites.",
   fields: {
     config: configField,
     filter: {
       kind: "valueOption",
       longOption: "--filter",
-      description: "筛选方式，默认 all",
+      description: "Ticket filter. Defaults to all.",
     },
   },
-  input: standardSchema(inputs.list),
-  success: {
-    kind: "data",
-    variants: {
-      listed: {
-        description: "票集查询结果",
-        schema: standardSchema(outputs.list),
-        exitCode: 0,
+  input: inputs.list,
+  examples: [{ input: { config: "ticket-graph.json", filter: "blocked" } }],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          listed: {
+            description: "Ticket list",
+            schema: outputs.list,
+            exitCode: 0,
+          },
+        },
       },
-    },
-  },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, () =>
-      list(configuration(input.config), input.filter ?? "all"),
-    );
-    return result.ok
-      ? outcome.data.listed(result.data)
-      : outcome.failure.rejected(result.data);
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, () =>
+          list(configuration(input.config), input.filter ?? "all"),
+        );
+        return result.ok
+          ? outcome.data.listed(result.data)
+          : outcome.failure.rejected(result.data);
+      },
+    });
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            listed: ({ tickets, total }) =>
+              text.lines([
+                `${total} tickets`,
+                ...tickets.map(
+                  (ticket) =>
+                    `${ticket.id}: ${ticket.status} (outstanding prerequisites: ${ticket.blocked_by_unfinished.join(", ") || "none"})`,
+                ),
+              ]),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 const setStatus = define.command("setStatus")({
   kind: "command",
   parent: "ticketGraph",
   name: "set-status",
-  description: "将一张或多张票设为同一状态，先整批预检，再逐票保存。",
+  description:
+    "Set the status of one or more tickets after validating the batch.",
   fields: {
     config: configField,
-    tickets: { kind: "variadicPositional", description: "票标识，保留前导零" },
+    tickets: {
+      kind: "variadicPositional",
+      description: "Ticket IDs, including leading zeros",
+    },
     status: {
       kind: "valueOption",
       longOption: "--status",
-      description: "整批目标状态，保留原值",
+      description: "Status value to apply to each ticket",
     },
   },
-  input: standardSchema(inputs.setStatus),
-  success: {
-    kind: "data",
-    variants: {
-      updated: {
-        description: "逐票状态修改结果",
-        schema: standardSchema(outputs.setStatus),
-        exitCode: 0,
-      },
-    },
-  },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, () => {
-      const config = configuration(input.config);
-      return withLock(config, () =>
-        update(
-          config,
-          {
-            field: "status",
-            tickets: input.tickets,
-            after: input.status,
+  input: inputs.setStatus,
+  examples: [
+    { input: { config: "ticket-graph.json", tickets: ["01"], status: "done" } },
+  ],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          updated: {
+            description: "Per-ticket status changes",
+            schema: preserveJsonOutput(outputs.setStatus),
+            exitCode: 0,
           },
-          dependencies.effects,
-        ),
-      );
+        },
+      },
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, () => {
+          const config = configuration(input.config);
+          return withLock(config, () =>
+            update(
+              config,
+              {
+                field: "status",
+                tickets: input.tickets,
+                after: input.status,
+              },
+              dependencies.effects,
+            ),
+          );
+        });
+        return result.ok
+          ? outcome.data.updated(result.data)
+          : outcome.failure.rejected(result.data);
+      },
     });
-    return result.ok
-      ? outcome.data.updated(result.data)
-      : outcome.failure.rejected(result.data);
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            updated: ({ results, issues }) =>
+              text.lines([
+                `${results.length} tickets processed.`,
+                ...results.map(describeChange),
+                ...issues.map(({ message }) => message),
+              ]),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 const setDeps = define.command("setDeps")({
   kind: "command",
   parent: "ticketGraph",
   name: "set-deps",
-  description: "替换依赖；前置票和 --clear 必须且只能提供一项。",
+  description: "Replace a ticket’s prerequisites or clear them with --clear.",
   fields: {
     config: configField,
-    ticket: { kind: "positional", description: "目标票标识" },
-    dependencies: { kind: "variadicPositional", description: "前置票标识" },
-    clear: { kind: "flag", longOption: "--clear", description: "显式清空依赖" },
-  },
-  input: standardSchema(inputs.setDeps, [], {
-    overrideAction: ({ valibotAction, jsonSchema }) =>
-      valibotAction.type === "check"
-        ? {
-            ...jsonSchema,
-            oneOf: [
-              { required: ["dependencies"], not: { required: ["clear"] } },
-              { required: ["clear"], not: { required: ["dependencies"] } },
-            ],
-          }
-        : undefined,
-  }),
-  success: {
-    kind: "data",
-    variants: {
-      updated: {
-        description: "依赖修改结果",
-        schema: standardSchema(outputs.setDeps),
-        exitCode: 0,
-      },
+    ticket: { kind: "positional", description: "Target ticket ID" },
+    dependencies: {
+      kind: "variadicPositional",
+      description: "Prerequisite ticket IDs",
+    },
+    clear: {
+      kind: "flag",
+      longOption: "--clear",
+      description: "Clear all prerequisites",
     },
   },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, async () => {
-      const config = configuration(input.config);
-      const { results, ...common } = await withLock(config, () =>
-        update(
-          config,
-          {
-            field: "blocked_by",
-            ticket: input.ticket,
-            after: input.dependencies ?? [],
+  input: inputs.setDeps,
+  examples: [
+    {
+      input: {
+        config: "ticket-graph.json",
+        ticket: "02",
+        dependencies: ["01"],
+      },
+    },
+  ],
+  usageConstraints: [
+    { kind: "count", fields: ["dependencies", "clear"], min: 1, max: 1 },
+  ],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          updated: {
+            description: "Dependency change result",
+            schema: preserveJsonOutput(outputs.setDeps),
+            exitCode: 0,
           },
-          dependencies.effects,
-        ),
-      );
-      return { ...common, ...results[0]! };
+        },
+      },
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, async () => {
+          const config = configuration(input.config);
+          const { results, ...common } = await withLock(config, () =>
+            update(
+              config,
+              {
+                field: "blocked_by",
+                ticket: input.ticket,
+                after: input.dependencies ?? [],
+              },
+              dependencies.effects,
+            ),
+          );
+          return { ...common, ...results[0]! };
+        });
+        return result.ok
+          ? outcome.data.updated(result.data)
+          : outcome.failure.rejected(result.data);
+      },
     });
-    return result.ok
-      ? outcome.data.updated(result.data)
-      : outcome.failure.rejected(result.data);
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            updated: (result) =>
+              text.lines([
+                describeChange(result),
+                ...result.issues.map(({ message }) => message),
+              ]),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 const historyCommand = define.command("history")({
   kind: "command",
   parent: "ticketGraph",
   name: "history",
-  description: "查询变更历史；历史不参与当前票图计算。",
+  description: "Read the ticket change history.",
   fields: {
     config: configField,
     ticket: {
       kind: "valueOption",
       longOption: "--ticket",
-      description: "仅查询指定票",
+      description: "Filter history by ticket ID",
     },
   },
-  input: standardSchema(inputs.history),
-  success: {
-    kind: "data",
-    variants: {
-      listed: {
-        description: "历史查询结果",
-        schema: standardSchema(outputs.history),
-        exitCode: 0,
+  input: inputs.history,
+  examples: [{ input: { config: "ticket-graph.json", ticket: "01" } }],
+  outputs: ({ atomic }) => {
+    const execution = atomic({
+      success: {
+        kind: "data",
+        variants: {
+          listed: {
+            description: "Ticket change history",
+            schema: preserveJsonOutput(outputs.history),
+            exitCode: 0,
+          },
+        },
       },
-    },
-  },
-  failures,
-  async handler({ input, dependencies, outcome }) {
-    const result = await attempt(dependencies.effects, () =>
-      history(configuration(input.config), input.ticket),
-    );
-    return result.ok
-      ? outcome.data.listed(result.data)
-      : outcome.failure.rejected(result.data);
+      failures,
+      async handler({ input, dependencies, outcome }) {
+        const result = await attempt(dependencies.effects, () =>
+          history(configuration(input.config), input.ticket),
+        );
+        return result.ok
+          ? outcome.data.listed(result.data)
+          : outcome.failure.rejected(result.data);
+      },
+    });
+    return {
+      default: "structured",
+      modes: {
+        structured: execution.structured({
+          description: "Machine-readable result.",
+        }),
+        text: execution.text({
+          description: "English result.",
+          success: {
+            listed: ({ events }) =>
+              text.lines([
+                `${events.length} changes`,
+                ...events.map(
+                  ({ ticket, field, time, before, after }) =>
+                    `${time} ${ticket} ${field}: ${JSON.stringify(before)} → ${JSON.stringify(after)}`,
+                ),
+              ]),
+          },
+          failures: { rejected: describeFailure },
+        }),
+      },
+    };
   },
 });
 
@@ -459,23 +690,29 @@ export function createCliContract(identity: CliCommandIdentity) {
     help: helpCapability({
       shortAlias: "-h",
       headings: {
-        usage: "用法",
-        commands: "命令",
-        arguments: "参数",
-        options: "选项",
+        usage: "Usage",
+        commands: "Commands",
+        arguments: "Arguments",
+        options: "Options",
+        schema: "Contract Discovery",
+        examples: "Examples",
       },
       wording: {
-        commandPlaceholder: "命令",
-        choices: "可选值：{choices}",
-        default: "默认值：{value}",
+        commandPlaceholder: "command",
+        choices: "(choices: {choices})",
+        default: "(default: {value})",
+        countExactly: "Choose exactly {count} of {fields}.",
       },
     }),
-    output: outputCapability({ defaultFormat: "structured" }),
+    schema: schemaCapability({
+      description: text.line("Inspect command contracts and wire schemas."),
+    }),
     commands: {
       ticketGraph: {
         kind: "rootGroup",
         name: identity.commandName,
-        description: "票图管理工具；各子命令通过 --config 选择票集。",
+        description:
+          "Manage Markdown ticket graphs. Select a ticket set with --config.",
       },
       ...init,
       ...checkCommand,
@@ -483,29 +720,6 @@ export function createCliContract(identity: CliCommandIdentity) {
       ...setStatus,
       ...setDeps,
       ...historyCommand,
-      ...define.command("schema")({
-        kind: "command",
-        parent: "ticketGraph",
-        name: "schema",
-        description: "导出完整 CLI 契约及输入和输出结构定义。",
-        fields: {},
-        input: standardSchema(v.strictObject({})),
-        success: {
-          kind: "data",
-          variants: {
-            exported: {
-              description: "完整 CLI 契约",
-              exitCode: 0,
-              schema: standardSchema(
-                v.strictObject({ manifest: v.record(v.string(), v.unknown()) }),
-              ),
-            },
-          },
-        },
-        failures: {},
-        handler: ({ dependencies, outcome }) =>
-          outcome.data.exported({ manifest: dependencies.getManifest() }),
-      }),
     },
   });
 }

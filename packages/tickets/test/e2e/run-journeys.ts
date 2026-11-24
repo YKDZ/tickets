@@ -246,6 +246,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     const passed = await runJourneyTargets(
       parseJourneyRunTargets(process.argv.slice(2)),
     );
+    if (passed.length === 0) throw new Error("No CLI journeys ran.");
     process.stdout.write(`${passed.join("\n")}\n`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

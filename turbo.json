@@ -40,6 +40,7 @@
       "tags": ["work:repair"]
     },
     "//#lint": {
+      "dependsOn": ["^lint"],
       "outputs": [],
       "tags": ["quality:light"]
     },
@@ -47,17 +48,15 @@
       "cache": false,
       "tags": ["work:repair"]
     },
-    "//#publication:artifact": {
-      "cache": false,
-      "tags": ["quality:conditional"]
-    },
-    "//#publication:readiness": {
-      "cache": false,
-      "tags": ["work:release"]
-    },
     "//#typecheck": {
       "outputs": [],
       "tags": ["quality:light"]
     }
-  }
+  },
+  "globalDependencies": [
+    "oxfmt.config.ts",
+    "oxlint.config.ts",
+    "packages/tooling-config/oxfmt.config.ts",
+    "packages/tooling-config/oxlint.config.ts"
+  ]
 }

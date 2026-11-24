@@ -47,7 +47,7 @@ function run(f: { config: string }, ...args: string[]) {
   return result;
 }
 
-void test("检查合法票图时只读取文件头中的机器字段", (t) => {
+void test("Read machine fields from the front matter of a valid ticket graph", (t) => {
   const body = '\n```yaml\nstatus: broken\nblocked_by: ["missing"]\n```\n';
   const f = fixture(t, {
     "01-ready.md": ticket("resolved") + body,
@@ -66,7 +66,7 @@ void test("检查合法票图时只读取文件头中的机器字段", (t) => {
   );
 });
 
-void test("缺失必需字段时报告票、文件和字段，查询不得把损坏依赖当作空列表", (t) => {
+void test("Locate missing fields and reject corrupt dependency lists", (t) => {
   const original = "---\nstatus: open\n---\n# 任务\nblocked_by: []\n";
   const f = fixture(t, { "07-missing.md": original });
   for (const command of ["check", "list"]) {
@@ -84,7 +84,7 @@ void test("缺失必需字段时报告票、文件和字段，查询不得把损
   assert.equal(readFileSync(f.file("07-missing.md"), "utf8"), original);
 });
 
-void test("字符串状态和字符串数组依赖采用同一字段规则", (t) => {
+void test("Apply consistent rules to status strings and dependency arrays", (t) => {
   const f = fixture(t, {
     "01-number.md": "---\nstatus: 7\nblocked_by: []\n---\n",
     "02-scalar.md": '---\nstatus: open\nblocked_by: "01"\n---\n',
@@ -107,7 +107,7 @@ void test("字符串状态和字符串数组依赖采用同一字段规则", (t)
   );
 });
 
-void test("文件头必须位于首部、闭合且为有效 YAML 映射", (t) => {
+void test("Require closed YAML front matter at the start of the file", (t) => {
   const f = fixture(t, {
     "01-body.md": `# 正文\n${ticket()}`,
     "02-unclosed.md": "---\nstatus: open\nblocked_by: []\n",
@@ -131,7 +131,7 @@ void test("文件头必须位于首部、闭合且为有效 YAML 映射", (t) =>
   }
 });
 
-void test("重复字段和重复票标识均定位到冲突来源", (t) => {
+void test("Locate duplicate fields and ticket IDs", (t) => {
   const f = fixture(t, {
     "01-a.md": ticket(),
     "01-b.md": ticket(),
@@ -161,7 +161,7 @@ void test("重复字段和重复票标识均定位到冲突来源", (t) => {
   );
 });
 
-void test("缺失引用和自依赖保留声明票及目标标识", (t) => {
+void test("Identify both ends of missing references and self-dependencies", (t) => {
   const f = fixture(t, {
     "01-missing.md": ticket("open", ["003"]),
     "02-self.md": ticket("open", ["02"]),
@@ -178,7 +178,7 @@ void test("缺失引用和自依赖保留声明票及目标标识", (t) => {
   );
 });
 
-void test("环报告沿真实依赖方向形成的路径，交付完成不会抹掉结构错误", (t) => {
+void test("Report cycles along actual dependency edges even for completed tickets", (t) => {
   const f = fixture(t, {
     "01-a.md": ticket("resolved", ["03"]),
     "02-b.md": ticket("open", ["01"]),
@@ -195,7 +195,7 @@ void test("环报告沿真实依赖方向形成的路径，交付完成不会抹
   assert.equal(cycle.ticket, "01");
 });
 
-void test("机器字段中的锚点和别名被明确定位，避免修改连带改变其他字段", (t) => {
+void test("Locate anchors and aliases in machine fields before editing", (t) => {
   const f = fixture(t, {
     "01-anchor.md":
       "---\nstatus: &state open\nblocked_by: []\nextra: *state\n---\n",
@@ -217,7 +217,7 @@ void test("机器字段中的锚点和别名被明确定位，避免修改连带
   );
 });
 
-void test("空白状态及非数字依赖不满足机器字段格式", (t) => {
+void test("Reject blank statuses and nonnumeric dependency IDs", (t) => {
   const f = fixture(t, {
     "01-blank.md": '---\nstatus: "  "\nblocked_by: []\n---\n',
     "02-nonnumeric.md": ticket("open", ["later"]),
@@ -237,7 +237,7 @@ void test("空白状态及非数字依赖不满足机器字段格式", (t) => {
   );
 });
 
-void test("修改块标量状态保留行末注释、其他字段、正文及 CRLF 换行", (t) => {
+void test("Preserve inline comments, other fields, body, and CRLF in a status edit", (t) => {
   const original =
     "---\r\nstatus: |- # 当前状态\r\n  open\r\nblocked_by: [] # 前置\r\nextra:\r\n  status: 保留\r\n---\r\n# 任务\r\n\r\nstatus: 正文保持原样\r\n";
   const f = fixture(t, { "01-block.md": original });
@@ -252,7 +252,7 @@ void test("修改块标量状态保留行末注释、其他字段、正文及 CR
   assert.equal(check.status, 0, check.stderr);
 });
 
-void test("替换块序列依赖保留字段前后的注释与其他元数据", (t) => {
+void test("Preserve comments and metadata when replacing a dependency sequence", (t) => {
   const original =
     '---\nstatus: open\nblocked_by: # 前置说明\n  - "01"\n  - "02" # 尾注\n\n# 所有者说明\nowner: "张三"\n---\n正文\n';
   const f = fixture(t, {
@@ -269,7 +269,7 @@ void test("替换块序列依赖保留字段前后的注释与其他元数据", 
   assert.equal(run(f, "check").status, 0);
 });
 
-void test("无缩进的块序列可显式清空，并保留 CRLF 与后续字段", (t) => {
+void test("Clear an unindented sequence while preserving CRLF and following fields", (t) => {
   const original =
     '---\r\nstatus: open\r\nblocked_by:\r\n- "01" # 前置\r\nowner: 张三\r\n---\r\n正文\r\n';
   const f = fixture(t, { "01-a.md": ticket(), "02-block.md": original });
@@ -281,7 +281,7 @@ void test("无缩进的块序列可显式清空，并保留 CRLF 与后续字段
   );
 });
 
-void test("删除旧环边允许旧环拆成较小的环，并报告独立剩余问题", (t) => {
+void test("Report remaining issues when removing an edge from an existing cycle", (t) => {
   const f = fixture(t, {
     "01-a.md": ticket("open", ["02", "03"]),
     "02-b.md": ticket("open", ["01"]),
@@ -312,7 +312,7 @@ void test("删除旧环边允许旧环拆成较小的环，并报告独立剩余
   assert.equal(readFileSync(f.file("01-a.md"), "utf8"), ticket("open", ["02"]));
 });
 
-void test("旧环中的新增环边仍被拒绝，不能只比较环的票集合", (t) => {
+void test("Reject a new cycle edge between tickets already in a cycle", (t) => {
   const original = ticket("open", ["02"]);
   const f = fixture(t, {
     "01-a.md": original,
@@ -331,7 +331,7 @@ void test("旧环中的新增环边仍被拒绝，不能只比较环的票集合
   assert.equal(readFileSync(f.file("01-a.md"), "utf8"), original);
 });
 
-void test("可修复错类型的块映射依赖，并完整保留其他字段", (t) => {
+void test("Repair mapping-shaped dependencies while preserving other fields", (t) => {
   const original =
     "---\nstatus: open\nblocked_by:\n  wrong:\n    - true # 原值尾注\nowner: 张三\n---\n正文\n";
   const f = fixture(t, { "01-bad-type.md": original });
@@ -346,7 +346,7 @@ void test("可修复错类型的块映射依赖，并完整保留其他字段", 
   assert.equal(run(f, "check").status, 0);
 });
 
-void test("最后一项使用块标量的依赖序列可替换且不吞掉下一字段", (t) => {
+void test("Replace a block scalar dependency without consuming the next field", (t) => {
   const original =
     "---\nstatus: open\nblocked_by:\n  - |-\n    01\nowner: 张三\n---\n正文\n";
   const f = fixture(t, { "01-a.md": ticket(), "02-last-block.md": original });
@@ -359,7 +359,7 @@ void test("最后一项使用块标量的依赖序列可替换且不吞掉下一
   );
 });
 
-void test("空值字段可通过命令修复，保留相邻注释与空行", (t) => {
+void test("Repair null fields and preserve adjacent comments and blank lines", (t) => {
   const f = fixture(t, {
     "01-null.md": "---\nstatus:\n# 前置说明\nblocked_by: []\n---\n正文\n",
   });
@@ -371,19 +371,27 @@ void test("空值字段可通过命令修复，保留相邻注释与空行", (t)
   );
 });
 
-void test("修复错类型字段时，结果与历史保留实际旧值", (t) => {
-  const f = fixture(t, {
-    "01-number.md": "---\nstatus: 7\nblocked_by: []\n---\n正文\n",
-  });
-  const result = run(f, "set-status", "01", "--status", "resolved");
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(success(result.stdout).results[0]!.before, 7);
-  const history = run(f, "history", "--ticket", "01");
-  assert.equal(history.status, 0, history.stderr);
-  assert.equal(success(history.stdout).events[0]!.before, 7);
+void test("Preserve previous values in results and history when repairing field types", (t) => {
+  for (const [yaml, previous] of [
+    ["7", 7],
+    [
+      "{__proto__: {legacy: true}, constructor: test}",
+      JSON.parse('{"__proto__":{"legacy":true},"constructor":"test"}'),
+    ],
+  ] as const) {
+    const f = fixture(t, {
+      "01-legacy.md": `---\nstatus: ${yaml}\nblocked_by: []\n---\n正文\n`,
+    });
+    const result = run(f, "set-status", "01", "--status", "resolved");
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(success(result.stdout).results[0]!.before, previous);
+    const history = run(f, "history", "--ticket", "01");
+    assert.equal(history.status, 0, history.stderr);
+    assert.deepEqual(success(history.stdout).events[0]!.before, previous);
+  }
 });
 
-void test("旧值无法被 JSON 忠实记录时拒绝修改，避免历史把非有限数字记成空值", (t) => {
+void test("Reject previous values that cannot be preserved in JSON history", (t) => {
   const original = "---\nstatus: .inf\nblocked_by: []\n---\n正文\n";
   const f = fixture(t, { "01-infinity.md": original });
   const result = run(f, "set-status", "01", "--status", "resolved");
@@ -392,7 +400,7 @@ void test("旧值无法被 JSON 忠实记录时拒绝修改，避免历史把非
   assert.equal(readFileSync(f.file("01-infinity.md"), "utf8"), original);
 });
 
-void test("JSON 转换会合并映射键或舍入整数时拒绝修改且不追加历史", (t) => {
+void test("Reject lossy JSON conversion without appending history", (t) => {
   const cases = [
     '---\nstatus:\n  1: first\n  "1": second\nblocked_by: []\n---\n正文\n',
     "---\nstatus: 9007199254740993\nblocked_by: []\n---\n正文\n",

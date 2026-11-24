@@ -1,6 +1,6 @@
 {
   "name": "@ykdz/tickets",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "本地 Markdown 票图管理命令行工具",
   "homepage": "https://github.com/YKDZ/tickets/tree/HEAD/packages/tickets#readme",
   "bugs": {
@@ -28,33 +28,31 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --pretty false && node scripts/generate-config-schema.ts && oxfmt --write ticket-graph.schema.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --pretty false && node scripts/generate-config-schema.ts && oxfmt --write ticket-graph.schema.json",
     "format:check": "oxfmt --list-different .",
     "format:write": "oxfmt --write .",
     "lint": "oxlint --quiet --format=unix --ignore-pattern node_modules .",
     "lint:fix": "oxlint --format=unix . --fix",
     "postbuild": "node -e \"if (process.platform !== 'win32') require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
-    "prepack": "pnpm exec turbo run build --filter=.",
-    "test": "node --conditions=source --test --test-reporter=spec --test-reporter=./scripts/node-test-count-reporter.ts --test-reporter-destination=stdout --test-reporter-destination=stderr 'test/unit/**/*.test.ts' 'test/integration/**/*.test.ts'",
-    "test:e2e": "node --conditions=source --test --test-timeout=180000 --test-reporter=spec --test-reporter=./scripts/node-test-count-reporter.ts --test-reporter-destination=stdout --test-reporter-destination=stderr 'test/e2e/**/*.test.ts'",
-    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
+    "test": "node --conditions=source --test --test-reporter=spec 'test/unit/**/*.test.ts' 'test/integration/**/*.test.ts'",
+    "test:e2e": "node --conditions=source --test --test-timeout=180000 --test-reporter=spec 'test/e2e/**/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit --pretty false"
   },
   "dependencies": {
-    "@valibot/to-json-schema": "catalog:",
     "@ykdz/cli-contract": "catalog:",
-    "valibot": "catalog:",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@ykdz/typescript-config": "link:../typescript-config",
+    "@ykdz/tooling-config": "workspace:../tooling-config",
     "ajv": "^8.20.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
+    "tsrs": "catalog:",
     "typescript-7": "catalog:"
   },
   "engines": {
-    "node": "^24.21.0"
+    "node": "^26.13.1"
   }
 }

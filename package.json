@@ -2,40 +2,30 @@
   "name": "tickets",
   "private": true,
   "type": "module",
-  "imports": {
-    "#npm-publication/*": "./scripts/npm-publication/*.ts"
-  },
   "scripts": {
-    "boundaries": "node --conditions=source scripts/run-turbo-boundaries.ts && node --conditions=source scripts/check-toolchain-versions.ts",
+    "boundaries": "turbo boundaries",
     "check": "node --conditions=source scripts/task-gates.ts check",
     "check:full": "node --conditions=source scripts/task-gates.ts check:full",
     "check:heavy": "node --conditions=source scripts/task-gates.ts check:heavy",
     "fix": "node --conditions=source scripts/task-gates.ts fix",
-    "format:check": "oxfmt --list-different --no-error-on-unmatched-pattern package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.json tsconfig.config.json *.config.ts .pnpmfile.mjs .gitignore .dockerignore Dockerfile TODO.md rust-toolchain.toml .vscode .github .devcontainer scripts skills",
-    "format:write": "oxfmt --write --no-error-on-unmatched-pattern package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.json tsconfig.config.json *.config.ts .pnpmfile.mjs .gitignore .dockerignore Dockerfile TODO.md rust-toolchain.toml .vscode .github .devcontainer scripts skills",
-    "lint": "oxlint --quiet --format=unix --no-error-on-unmatched-pattern *.config.ts .pnpmfile.mjs scripts",
-    "lint:fix": "oxlint --format=unix --no-error-on-unmatched-pattern *.config.ts .pnpmfile.mjs scripts --fix",
-    "publication:artifact": "node --conditions=source scripts/npm-publication/check-artifact.ts",
-    "publication:readiness": "node --conditions=source scripts/npm-publication/check-readiness.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
+    "format:check": "oxfmt --list-different --no-error-on-unmatched-pattern *.json pnpm-workspace.yaml pnpm-lock.yaml *.config.ts .gitignore .dockerignore Dockerfile TODO.md rust-toolchain.toml .vscode .github .changeset/config.json .devcontainer resources scripts template test skills",
+    "format:write": "oxfmt --write --no-error-on-unmatched-pattern *.json pnpm-workspace.yaml pnpm-lock.yaml *.config.ts .gitignore .dockerignore Dockerfile TODO.md rust-toolchain.toml .vscode .github .changeset/config.json .devcontainer resources scripts template test skills",
+    "lint": "oxlint --quiet --format=unix --no-error-on-unmatched-pattern *.config.ts scripts template test",
+    "lint:fix": "oxlint --format=unix --no-error-on-unmatched-pattern *.config.ts scripts template test --fix",
+    "typecheck": "tsc --build --noEmit --pretty false"
   },
   "devDependencies": {
+    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
-    "@types/semver": "catalog:",
-    "@types/spdx-expression-parse": "catalog:",
-    "npm": "catalog:",
+    "@ykdz/tooling-config": "workspace:./packages/tooling-config",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
-    "semver": "catalog:",
-    "smol-toml": "catalog:",
-    "spdx-expression-parse": "catalog:",
-    "tar": "catalog:",
+    "tsrs": "catalog:",
     "turbo": "catalog:",
     "typescript-7": "catalog:"
   },
   "engines": {
-    "node": "24.21.0"
+    "node": "26.13.1"
   },
-  "packageManager": "pnpm@12.9.1"
+  "packageManager": "pnpm@12.21.0"
 }

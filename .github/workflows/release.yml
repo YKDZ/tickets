@@ -1,4 +1,4 @@
-name: Publish verified npm artifact
+name: Publish npm packages
 
 on:
   workflow_dispatch:
@@ -6,117 +6,89 @@ on:
 permissions: {}
 
 concurrency:
-  group: npm-publication
+  group: npm-publication-${{ github.repository }}
   cancel-in-progress: false
   queue: max
 
 jobs:
-  verify:
-    name: Verify publication artifact
+  pack:
+    name: Check and pack
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     permissions:
       contents: read
+    outputs:
+      pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}
     steps:
-      - name: Require the default branch dispatch
-        run: |
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          test "$GITHUB_REF" = "refs/heads/$GITHUB_DEFAULT_BRANCH"
-          test -n "$GITHUB_SHA"
-        env:
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      - name: Checkout source
+      - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
-          fetch-depth: 1
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Read Node version
+        id: node-runtime
+        run: echo "runtime=node@$(jq -er '.engines.node' package.json)" >> "$GITHUB_OUTPUT"
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
         with:
-          node-version-file: package.json
-      - name: Set up pnpm
-        uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
-        with:
+          runtime: ${{ steps.node-runtime.outputs.runtime }}
+          install: false
           cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Create publication staging directory
-        run: |
-          mkdir -p "$RUNNER_TEMP/npm-publication-artifact"
-          test -z "$(find "$RUNNER_TEMP/npm-publication-artifact" -mindepth 1 -print -quit)"
-      - name: Run Full Check once
-        run: node --conditions=source scripts/task-gates.ts check:full
-      - name: Verify publication artifact
-        run: pnpm run publication:artifact
-        env:
-          PUBLICATION_ARTIFACT_OUTPUT_DIRECTORY: ${{ runner.temp }}/npm-publication-artifact
-          PUBLICATION_ARTIFACT_REQUIRED: "true"
-      - name: Upload verified npm artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Check source
+        run: pnpm run check && pnpm run check:heavy
+      - name: Build packages in dependency order
+        run: pnpm exec turbo run build
+      - name: Pack unpublished versions
+        id: pack
+        uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+      - name: Download the candidate for installation testing
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: npm-publication-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/npm-publication-artifact/*.tgz
-            ${{ runner.temp }}/npm-publication-artifact/SHA512SUMS
-            ${{ runner.temp }}/npm-publication-artifact/verified-publication-artifact.json
-          if-no-files-found: error
+          artifact-ids: ${{ steps.pack.outputs.pack-dir-artifact-id }}
+          path: ${{ runner.temp }}/tickets-pack
+      - name: Test the installed candidate
+        shell: bash
+        run: |
+          mapfile -d '' candidates < <(find "$RUNNER_TEMP/tickets-pack" -type f -name '*.tgz' -print0)
+          if [[ ${#candidates[@]} -ne 1 ]]; then
+            echo "Expected one tickets tarball from Changesets." >&2
+            exit 1
+          fi
+          consumer=$(mktemp -d)
+          trap 'rm -rf "$consumer"' EXIT
+          npm install --prefix "$consumer" --no-audit --no-fund "${candidates[0]}"
+          TICKETS_PACKED_PACKAGE_ROOT="$consumer/node_modules/@ykdz/tickets" \
+            pnpm --filter @ykdz/tickets exec node --conditions=source test/e2e/run-journeys.ts packed "$consumer/node_modules/.bin/tickets"
 
   publish:
-    name: Publish verified npm artifact
-    needs: verify
+    name: Publish npm packages and GitHub Release
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: pack
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          fetch-depth: 1
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: package.json
-      - name: Download verified npm artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: npm-publication-${{ github.run_id }}
-          path: ${{ runner.temp }}/npm-publication-download
-      - name: Publish the verified tgz with OIDC
-        run: node --conditions=source scripts/npm-publication/publish.ts
-        env:
-          PUBLICATION_ARTIFACT_DIRECTORY: ${{ runner.temp }}/npm-publication-download
-
-  release:
-    name: Create immutable GitHub Release
-    needs: publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment: npm
     permissions:
       contents: write
+      id-token: write
     steps:
-      - name: Checkout source
+      - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
-          fetch-depth: 1
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Read Node version
+        id: node-runtime
+        run: echo "runtime=node@$(jq -er '.engines.node' package.json)" >> "$GITHUB_OUTPUT"
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
         with:
-          node-version-file: package.json
-      - name: Download verified npm artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          runtime: ${{ steps.node-runtime.outputs.runtime }}
+          install: false
+          cache: false
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Publish packed versions
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          name: npm-publication-${{ github.run_id }}
-          path: ${{ runner.temp }}/npm-publication-release
-      - name: Create immutable GitHub Release
-        run: node --conditions=source scripts/npm-publication/release.ts
-        env:
-          PUBLICATION_ARTIFACT_DIRECTORY: ${{ runner.temp }}/npm-publication-release
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ github.token }}
+          pack-dir-artifact-id: ${{ needs.pack.outputs.pack-dir-artifact-id }}

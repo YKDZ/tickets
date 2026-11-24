@@ -16,7 +16,7 @@ void describe("CLI command identity", () => {
     { name: "uppercase ASCII", command: "Release", message: "lowercase ASCII" },
     { name: "non-ASCII", command: "发布", message: "lowercase ASCII" },
   ]) {
-    void it(`拒绝格式不合法的命令名：${name}`, () => {
+    void it(`Reject invalid command name: ${name}`, () => {
       assert.throws(
         () => validateCliCommandName(command),
         (error: unknown) => {
@@ -28,7 +28,7 @@ void describe("CLI command identity", () => {
     });
   }
 
-  void it("接受符合格式的命令名，并拒绝工作区中已使用的名称", () => {
+  void it("Accept valid names and reject workspace collisions", () => {
     assert.equal(validateCliCommandName("release-tool", []), "release-tool");
     assert.throws(
       () => validateCliCommandName("release-tool", ["release-tool"]),

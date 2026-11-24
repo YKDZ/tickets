@@ -44,7 +44,7 @@ function run(f: { config: string }, ...args: string[]) {
   };
 }
 
-void test("配置只指定完成值，状态修改固定使用 status 并保留旧历史", (t) => {
+void test("Use status for changes and preserve existing history", (t) => {
   const f = fixture(t);
   mkdirSync(f.directory);
   writeFileSync(
@@ -83,7 +83,7 @@ void test("配置只指定完成值，状态修改固定使用 status 并保留�
   assert.equal(run(f, "list").data.tickets[0]!.delivery_complete, false);
 });
 
-void test("初始化保留目录与多个完成值，生成的配置可直接检查和修改票图", (t) => {
+void test("Initialize with multiple completion values and use the resulting configuration", (t) => {
   const f = fixture(t);
   mkdirSync(f.directory);
   const ticket = join(f.directory, "01-first.md");
@@ -116,7 +116,7 @@ void test("初始化保留目录与多个完成值，生成的配置可直接检
   assert.equal(run(f, "list").data.tickets[0]!.delivery_complete, true);
 });
 
-void test("所有读取命令拒绝已移除的配置字段，并定位字段且不修改文件", (t) => {
+void test("Reject removed configuration fields with their locations without writing", (t) => {
   const f = fixture(t);
   mkdirSync(f.directory);
   const original = JSON.stringify({
@@ -149,7 +149,7 @@ void test("所有读取命令拒绝已移除的配置字段，并定位字段且
   assert.equal(existsSync(`${f.config}.history.jsonl`), false);
 });
 
-void test("初始化只创建配置，票目录缺失和票图错误由 check 报告", (t) => {
+void test("Create only the configuration and leave graph validation to check", (t) => {
   const f = fixture(t);
   const result = run(
     f,
@@ -178,7 +178,7 @@ void test("初始化只创建配置，票目录缺失和票图错误由 check �
   assert.equal(existsSync(`${g.config}.history.jsonl`), false);
 });
 
-void test("初始化拒绝无效参数和候选配置，已有配置保持原样", (t) => {
+void test("Reject invalid initialization input and preserve the existing configuration", (t) => {
   const f = fixture(t);
   const init = ["init", "--tickets", "issues", "--completion-value", "done"];
   for (const args of [
@@ -227,7 +227,7 @@ void test("初始化拒绝无效参数和候选配置，已有配置保持原样
   );
 });
 
-void test("缺少或不可写的父目录使初始化失败且不产生文件", (t) => {
+void test("Fail initialization when the parent directory is missing or unwritable", (t) => {
   const f = fixture(t);
   const nested = { config: join(f.root, "absent", "ticket-graph.json") };
   const missing = run(
@@ -271,7 +271,7 @@ void test("缺少或不可写的父目录使初始化失败且不产生文件", 
   }
 });
 
-void test("并行初始化同一配置只有一次创建成功", async (t) => {
+void test("Allow only one concurrent initialization to succeed", async (t) => {
   const f = fixture(t);
   const launch = (value: string) =>
     new Promise<{
@@ -321,10 +321,10 @@ void test("并行初始化同一配置只有一次创建成功", async (t) => {
 });
 
 void test(
-  "输出故障不抹掉已保存的配置",
+  "Report a saved configuration after an output failure",
   { skip: process.platform !== "linux" },
   (t) => {
-    assert.ok(existsSync("/dev/full"), "Linux 验收需要 /dev/full。");
+    assert.ok(existsSync("/dev/full"), "This Linux test requires /dev/full.");
     const f = fixture(t);
     const full = openSync("/dev/full", "w");
     let result;
@@ -362,7 +362,7 @@ void test(
 );
 
 void test(
-  "配置只写入一部分时报告已创建及保存结果不确定",
+  "Report creation and uncertain persistence after a partial configuration write",
   { skip: process.platform !== "linux" },
   (t) => {
     const f = fixture(t);
@@ -403,7 +403,7 @@ void test(
   },
 );
 
-void test("配置语法错误与结构错误区分，缺失和特殊字符字段均可定位", (t) => {
+void test("Distinguish syntax errors and locate missing or escaped configuration keys", (t) => {
   const f = fixture(t);
   writeFileSync(f.config, "{broken");
   const syntax = run(f, "check");

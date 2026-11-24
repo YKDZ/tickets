@@ -1,5 +1,16 @@
 # 更新日志
 
+## 2.0.0
+
+### 不兼容变更
+
+- 升级到 Node.js 26.13.1 及以上的 26.x 版本，采用新版 CLI 契约和发布流程。
+
+  - 使用 `tickets --schema` 查看命令目录，再用 `tickets check --schema=input` 查询指定契约。移除旧的 `tickets schema`。
+  - 结构化结果的 `schemaVersion` 为 `"3"`，业务结果带有 `outputMode`。六个业务命令默认返回结构化结果，也可通过 `--output text` 阅读英文结果。
+  - 例如，检查通过时返回 `{"schemaVersion":"3","command":"check","outputMode":"structured","kind":"data","variant":"checked","data":{"scope":{"config":"/project/ticket-graph.json","tickets":"/project/issues"},"valid":true,"total":2}}`。
+  - 现有票集配置、票文件与历史可继续使用。随包提供与版本对应的票集配置 Schema。
+
 ## [Unreleased]
 
 ## [1.0.1] - 2026-10-18

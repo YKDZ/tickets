@@ -6,7 +6,8 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!ticket-graph.schema.json"],
       "outputs": ["dist/**", "ticket-graph.schema.json"],
-      "tags": ["quality:light"]
+      "tags": ["work:preparation"],
+      "cache": false
     },
     "format:check": {
       "inputs": [],
@@ -21,6 +22,7 @@
       "tags": ["work:repair"]
     },
     "lint": {
+      "dependsOn": ["^lint"],
       "inputs": [],
       "outputs": [],
       "tags": ["quality:light"]
@@ -35,11 +37,6 @@
       "inputs": [],
       "outputs": [],
       "tags": ["work:lifecycle"]
-    },
-    "prepack": {
-      "inputs": [],
-      "outputs": [],
-      "tags": ["work:release"]
     },
     "test": {
       "dependsOn": ["build"],

@@ -1,14 +1,14 @@
-import * as v from "valibot";
+import { z } from "zod";
 
 import type { JsonValue } from "./types.ts";
 
-export const jsonValueSchema: v.GenericSchema<JsonValue> = v.lazy(() =>
-  v.union([
-    v.null(),
-    v.boolean(),
-    v.pipe(v.number(), v.finite()),
-    v.string(),
-    v.array(jsonValueSchema),
-    v.record(v.string(), jsonValueSchema),
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.boolean(),
+    z.number(),
+    z.string(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
   ]),
 );

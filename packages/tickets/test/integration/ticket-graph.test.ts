@@ -93,7 +93,7 @@ function runAsync(f: { config: string }, ...args: string[]) {
   });
 }
 
-void test("按配置计算未完成票的直接前置，查询不写文件", (t) => {
+void test("Find unfinished direct prerequisites without writing files", (t) => {
   const f = fixture(t, {
     "01": ticket("resolved"),
     "02": ticket("open", ["01"]),
@@ -112,7 +112,7 @@ void test("按配置计算未完成票的直接前置，查询不写文件", (t)
   assert.equal(readFileSync(f.path("02"), "utf8"), ticket("open", ["01"]));
 });
 
-void test("帮助不要求配置；无效用法和配置返回可定位的结构化错误", (t) => {
+void test("Show help without configuration and locate usage and configuration errors", (t) => {
   for (const command of [
     "",
     "init",
@@ -145,7 +145,7 @@ void test("帮助不要求配置；无效用法和配置返回可定位的结构
   assert.equal(invalid.error.error.file, f.config);
 });
 
-void test("修改完成字段保留其余原文，重复设置不重写或追加历史", (t) => {
+void test("Preserve other content and skip writes for repeated status updates", (t) => {
   const before =
     '---\r\n# 注释\r\nstatus: open # 仍需实施\r\nblocked_by: []\r\nextra: "原样保留"\r\n---\r\n正文：status: open\r\n';
   const f = fixture(t, { "01": before }, { values: ["shipped", "resolved"] });
@@ -173,7 +173,7 @@ void test("修改完成字段保留其余原文，重复设置不重写或追加
   assert.equal(run(f, "list").data.tickets[0]!.delivery_complete, true);
 });
 
-void test("替换和显式清空依赖留下可筛选的历史，损坏历史不影响当前查询", (t) => {
+void test("Record dependency changes and isolate corrupt history from current queries", (t) => {
   const f = fixture(t, {
     "01": ticket("resolved"),
     "02": ticket(),
@@ -208,7 +208,7 @@ void test("替换和显式清空依赖留下可筛选的历史，损坏历史不
   assert.equal(run(f, "list").status, 0);
 });
 
-void test("同一票集并行修改依赖不会共同形成新环", async (t) => {
+void test("Prevent concurrent dependency changes from creating a cycle", async (t) => {
   for (let round = 0; round < 6; round++) {
     const tickets: Record<string, string> = { "01": ticket(), "02": ticket() };
     for (let index = 10; index < 80; index++) tickets[String(index)] = ticket();
@@ -234,7 +234,7 @@ void test("同一票集并行修改依赖不会共同形成新环", async (t) =>
   }
 });
 
-void test("票已保存而历史失败时报告部分结果", (t) => {
+void test("Report partial success when a ticket is saved and history fails", (t) => {
   const f = fixture(t, { "01": ticket() });
   mkdirSync(f.history);
   const partial = run(f, "set-status", "01", "--status", "resolved");
@@ -247,10 +247,10 @@ void test("票已保存而历史失败时报告部分结果", (t) => {
 });
 
 void test(
-  "输出故障不抹掉已写入的票及历史",
+  "Report saved tickets and history after an output failure",
   { skip: process.platform !== "linux" },
   (t) => {
-    assert.ok(existsSync("/dev/full"), "Linux 验收需要 /dev/full。");
+    assert.ok(existsSync("/dev/full"), "This Linux test requires /dev/full.");
     const g = fixture(t, { "01": ticket() });
     const full = openSync("/dev/full", "w");
     let result;
@@ -273,7 +273,7 @@ void test(
   },
 );
 
-void test("新增依赖不能把读取失败当作无依赖，独立修改仍可逐步进行", (t) => {
+void test("Reject new dependencies when prerequisites cannot be read", (t) => {
   const f = fixture(t, {
     "01": ticket(),
     "02": ticket("open", ["03"]),
@@ -292,7 +292,7 @@ void test("新增依赖不能把读取失败当作无依赖，独立修改仍可
   assert.equal(run(f, "set-status", "01", "--status", "in-progress").status, 0);
 });
 
-void test("空结果保留查询范围，完成值可配置，改文件名后缀不改变标识", (t) => {
+void test("Preserve scope for empty results and keep IDs stable after filename changes", (t) => {
   const f = fixture(
     t,
     {
@@ -306,7 +306,7 @@ void test("空结果保留查询范围，完成值可配置，改文件名后缀
   mkdirSync(join(f.root, "issues", "archive"));
   writeFileSync(
     join(f.root, "issues", "archive", "99-old.md"),
-    "历史文件不参与当前票集",
+    "History files are outside the current ticket set",
   );
   writeFileSync(join(f.root, "issues", "README.md"), "说明文件不参与当前票集");
   const unblocked = run(f, "list", "--filter", "unblocked");
@@ -324,7 +324,7 @@ void test("空结果保留查询范围，完成值可配置，改文件名后缀
   assert.deepEqual(run(empty, "list").data.tickets, []);
 });
 
-void test("无效参数、无法读取配置和写入前文件故障不改票或历史", (t) => {
+void test("Preserve tickets and history when validation or pre-write checks fail", (t) => {
   const f = fixture(t, { "01": ticket() });
   for (const args of [
     ["unknown"],
@@ -348,7 +348,7 @@ void test("无效参数、无法读取配置和写入前文件故障不改票或
   assert.equal(readdirSync(join(f.root, "issues")).length, 1);
 });
 
-void test("无变化不重写票或追加历史", (t) => {
+void test("Skip writes and history when nothing changes", (t) => {
   const f = fixture(t, { "01": ticket() });
   const before = statSync(f.path("01"));
   assert.equal(
@@ -360,7 +360,7 @@ void test("无变化不重写票或追加历史", (t) => {
 });
 
 void test(
-  "无写权限时没有票或历史副作用",
+  "Leave tickets and history untouched without write permission",
   { skip: process.platform !== "linux" },
   (t) => {
     const f = fixture(t, { "01": ticket() });
@@ -389,7 +389,7 @@ void test(
 );
 
 void test(
-  "终端与管道使用相同的 JSON 结果",
+  "Return the same JSON to a terminal and a pipe",
   { skip: process.platform !== "linux" },
   (t) => {
     const f = fixture(t, { "01": ticket() });
@@ -410,7 +410,7 @@ void test(
   },
 );
 
-void test("同目录的不同票集配置各有独立历史", (t) => {
+void test("Keep separate history for different configurations in the same directory", (t) => {
   const f = fixture(t, { "01": ticket() });
   mkdirSync(join(f.root, "other"));
   writeFileSync(join(f.root, "other", "01-other.md"), ticket());
@@ -429,7 +429,7 @@ void test("同目录的不同票集配置各有独立历史", (t) => {
   assert.equal(run(g, "history").data.events[0]!.after, "working");
 });
 
-void test("没有末尾换行的有效历史在追加后仍能完整查询", (t) => {
+void test("Append to valid history missing a trailing newline", (t) => {
   const f = fixture(t, { "01": ticket() });
   assert.equal(run(f, "set-status", "01", "--status", "working").status, 0);
   writeFileSync(f.history, readFileSync(f.history, "utf8").trimEnd());
@@ -444,7 +444,7 @@ void test("没有末尾换行的有效历史在追加后仍能完整查询", (t)
   );
 });
 
-void test("历史查询保留已有记录的附加信息，不收窄旧字段名", (t) => {
+void test("Preserve extra fields and original field names in existing history", (t) => {
   const f = fixture(t, { "01": ticket() });
   const legacy = {
     ticket: "01",
@@ -462,7 +462,7 @@ void test("历史查询保留已有记录的附加信息，不收窄旧字段名
   assert.deepEqual(result.data.events, [legacy]);
 });
 
-void test("下游短暂延迟读取时，长查询结果仍完整输出", async (t) => {
+void test("Emit the full query result when the reader starts late", async (t) => {
   const f = fixture(t, { "01": ticket("工作".repeat(30000)) });
   const child = spawn(process.execPath, [cli, "list", "--config", f.config]);
   child.stdout.setEncoding("utf8");
@@ -484,11 +484,11 @@ void test("下游短暂延迟读取时，长查询结果仍完整输出", async 
   assert.equal(status, 0, stderr);
   assert.ok(
     success(stdout).tickets[0]!.status === "工作".repeat(30000),
-    "长状态值须完整保留",
+    "Preserve the full status string",
   );
 });
 
-void test("写入后管道关闭仍报告失败与已保存效果", async (t) => {
+void test("Report saved results when the output pipe closes after writing", async (t) => {
   const f = fixture(t, { "01": ticket() });
   const child = spawn(process.execPath, [
     cli,

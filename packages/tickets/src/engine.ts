@@ -17,8 +17,6 @@ import {
 import { dirname, resolve, join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 
-import * as v from "valibot";
-
 import { configSchema, configSchemaUrl } from "./config-schema.ts";
 import { inspect, replaceValue } from "./graph.ts";
 import type { Configuration, Effects, ChangeResult } from "./types.ts";
@@ -45,7 +43,7 @@ function read(path: string) {
     return readFileSync(path, "utf8");
   } catch (cause) {
     const error = cause as NodeJS.ErrnoException;
-    throw new Failure("READ_FAILED", "无法读取文件。", {
+    throw new Failure("READ_FAILED", "Could not read the file.", {
       file: path,
       cause: error.code,
     });
@@ -61,51 +59,69 @@ function configuration(path: string) {
     const error = cause as NodeJS.ErrnoException;
     if (error instanceof Failure) throw error;
     if (!(error instanceof SyntaxError)) throw error;
-    throw new Failure("INVALID_CONFIG", "配置必须是有效 JSON。", { file });
+    throw new Failure("INVALID_CONFIG", "Configuration must be valid JSON.", {
+      file,
+    });
   }
   return configValue(file, value);
 }
 
 function configValue(file: string, value: unknown): Configuration {
-  const parsed = v.safeParse(configSchema, value, {
-    message: "配置值不符合要求。",
-  });
+  const parsed = configSchema.safeParse(value);
   if (!parsed.success) {
-    const issues = parsed.issues.map((issue) => {
-      const path = (issue.path ?? [])
-        .map(
-          ({ key }) =>
-            `/${String(key).replaceAll("~", "~0").replaceAll("/", "~1")}`,
-        )
-        .join("");
-      const keyword =
-        issue.type === "strict_object" && issue.expected === "never"
-          ? "additionalProperties"
-          : issue.type === "regex"
-            ? "pattern"
-            : issue.type === "min_length"
-              ? "minItems"
-              : issue.input === undefined
-                ? "required"
-                : "type";
+    const issues = parsed.error.issues.flatMap((issue) => {
+      const pointer = (keys: readonly PropertyKey[]) =>
+        keys
+          .map(
+            (key) =>
+              `/${String(key).replaceAll("~", "~0").replaceAll("/", "~1")}`,
+          )
+          .join("");
+      if (issue.code === "unrecognized_keys")
+        return issue.keys.map((key) => {
+          const path = pointer([...issue.path, key]);
+          return {
+            path,
+            keyword: "additionalProperties",
+            message:
+              path === "/completion/field"
+                ? "Remove completion.field and migrate ticket statuses to status."
+                : `Unrecognized configuration field: ${key}.`,
+          };
+        });
+      const field = issue.path.reduce<unknown>(
+        (item, key) =>
+          typeof item === "object" && item !== null && Object.hasOwn(item, key)
+            ? (item as Record<PropertyKey, unknown>)[key]
+            : undefined,
+        value,
+      );
       return {
-        path,
-        keyword,
-        message:
-          path === "/completion/field"
-            ? "状态字段已固定为 status，请移除 completion.field；旧票的其他状态字段须先迁移为 status。"
-            : issue.message,
+        path: pointer(issue.path),
+        keyword:
+          issue.code === "invalid_format"
+            ? "pattern"
+            : issue.code === "too_small"
+              ? "minItems"
+              : field === undefined
+                ? "required"
+                : "type",
+        message: issue.message,
       };
     });
-    throw new Failure("INVALID_CONFIG", "配置结构有误，请按字段位置修正。", {
-      file,
-      issues,
-    });
+    throw new Failure(
+      "INVALID_CONFIG",
+      "Invalid configuration. Correct the fields listed below.",
+      {
+        file,
+        issues,
+      },
+    );
   }
   return {
     file,
-    directory: resolve(dirname(file), parsed.output.tickets),
-    completion: parsed.output.completion,
+    directory: resolve(dirname(file), parsed.data.tickets),
+    completion: parsed.data.completion,
     history: `${file}.history.jsonl`,
   };
 }
@@ -131,10 +147,14 @@ function initialize(
   } catch (cause) {
     const error = cause as NodeJS.ErrnoException;
     if (error.code === "EEXIST")
-      throw new Failure("CONFIG_EXISTS", "配置已存在，未覆盖。", { file });
+      throw new Failure(
+        "CONFIG_EXISTS",
+        "The configuration file already exists.",
+        { file },
+      );
     throw new Failure(
       "WRITE_FAILED",
-      "无法完成配置写入，请核对 effects 中的保存结果。",
+      "Could not finish writing the configuration. Check the reported save results.",
       { file, cause: error.code },
     );
   } finally {
@@ -152,7 +172,7 @@ function sources(config: Configuration) {
     entries = readdirSync(config.directory, { withFileTypes: true });
   } catch (cause) {
     const error = cause as NodeJS.ErrnoException;
-    throw new Failure("READ_FAILED", "无法读取票目录。", {
+    throw new Failure("READ_FAILED", "Could not read the ticket directory.", {
       file: config.directory,
       cause: error.code,
     });
@@ -165,7 +185,7 @@ function sources(config: Configuration) {
       if (!entry.isFile())
         throw new Failure(
           "INVALID_TICKET_FILE",
-          "票文件必须是普通文件，不能是目录或符号链接。",
+          "Ticket files must be regular files.",
           { file },
         );
       return { file, id: entry.name.match(/^\d+/)![0], text: read(file) };
@@ -196,10 +216,14 @@ function update(
   const prepared = ids.map((id) => {
     const matches = current.tickets.filter((ticket) => ticket.id === id);
     if (matches.length !== 1)
-      throw new Failure("INVALID_TARGET", "目标票不存在或标识重复。", {
-        ticket: id,
-        files: matches.map((ticket) => ticket.file),
-      });
+      throw new Failure(
+        "INVALID_TARGET",
+        "The target ticket is missing or its ID is duplicated.",
+        {
+          ticket: id,
+          files: matches.map((ticket) => ticket.file),
+        },
+      );
     const ticket = matches[0]!;
     const before = ticket.values[field];
     const changed = JSON.stringify(before) !== JSON.stringify(after);
@@ -251,14 +275,18 @@ function update(
     (edge) => !current.cyclicEdges.has(edge),
   );
   if (introduced.length || newCycle)
-    throw new Failure("INVALID_CHANGE", "修改会引入新的结构错误。", {
-      issues: [
-        ...introduced,
-        ...(newCycle
-          ? candidate.issues.filter((issue) => issue.code === "CYCLE")
-          : []),
-      ],
-    });
+    throw new Failure(
+      "INVALID_CHANGE",
+      "The change would introduce structural errors.",
+      {
+        issues: [
+          ...introduced,
+          ...(newCycle
+            ? candidate.issues.filter((issue) => issue.code === "CYCLE")
+            : []),
+        ],
+      },
+    );
   if (change.field === "blocked_by") {
     const pending = change.after.filter(
       (id) => !prepared[0]!.ticket.blocked_by?.includes(id),
@@ -272,7 +300,7 @@ function update(
       if (matches.length !== 1 || matches[0]!.blocked_by === null)
         throw new Failure(
           "UNVERIFIABLE_CHANGE",
-          "新增依赖涉及无法确定前置关系的票，请先修复该票。",
+          "Fix the ticket with unresolved prerequisites before adding this dependency.",
           {
             ticket: ids[0],
             target: id,
@@ -311,7 +339,7 @@ function update(
       if (field === "blocked_by") recordDependencyEffects(effects, result);
     } catch (cause) {
       const error = cause as NodeJS.ErrnoException;
-      throw new Failure("WRITE_FAILED", "票文件未保存。", {
+      throw new Failure("WRITE_FAILED", "Could not save the ticket file.", {
         file: ticket.file,
         cause: error.code,
       });
@@ -345,7 +373,7 @@ function update(
       if (field === "blocked_by") recordDependencyEffects(effects, result);
       throw new Failure(
         "HISTORY_WRITE_FAILED",
-        "票已保存，无法确认历史完整写入。",
+        "The ticket was saved. The history write could not be confirmed.",
         { file: config.history, cause: error.code },
       );
     }
@@ -367,7 +395,7 @@ function history(config: Configuration, ticket: string | undefined) {
     const error = cause as NodeJS.ErrnoException;
     if (error.code === "ENOENT") text = "";
     else
-      throw new Failure("READ_FAILED", "无法读取历史。", {
+      throw new Failure("READ_FAILED", "Could not read the history.", {
         file: config.history,
         cause: error.code,
       });
@@ -393,10 +421,14 @@ function history(config: Configuration, ticket: string | undefined) {
       !Object.hasOwn(event, "before") ||
       !Object.hasOwn(event, "after")
     ) {
-      throw new Failure("INVALID_HISTORY", "历史记录损坏。", {
-        file: config.history,
-        line: index + 1,
-      });
+      throw new Failure(
+        "INVALID_HISTORY",
+        "The history contains an invalid entry.",
+        {
+          file: config.history,
+          line: index + 1,
+        },
+      );
     }
     return event;
   });
@@ -418,7 +450,7 @@ async function withLock<T>(config: Configuration, action: () => T): Promise<T> {
     directory = realpathSync(config.directory);
   } catch (cause) {
     const error = cause as NodeJS.ErrnoException;
-    throw new Failure("READ_FAILED", "无法读取票目录。", {
+    throw new Failure("READ_FAILED", "Could not read the ticket directory.", {
       file: config.directory,
       cause: error.code,
     });
@@ -432,14 +464,18 @@ async function withLock<T>(config: Configuration, action: () => T): Promise<T> {
     } catch (cause) {
       const error = cause as NodeJS.ErrnoException;
       if (error.code !== "EEXIST")
-        throw new Failure("LOCK_FAILED", "无法取得票集写入锁。", {
-          file,
-          cause: error.code,
-        });
+        throw new Failure(
+          "LOCK_FAILED",
+          "Could not acquire the ticket set write lock.",
+          {
+            file,
+            cause: error.code,
+          },
+        );
       if (Date.now() >= deadline)
         throw new Failure(
           "LOCKED",
-          "票集写入锁仍被占用。若进程已异常退出，确认没有写入后清理锁文件。",
+          "The ticket set is locked. If the process has exited, confirm that no write is in progress before removing the lock file.",
           { file },
         );
       await setTimeout(25);
@@ -463,10 +499,14 @@ function checkedGraph(config: Configuration) {
   const ticket_graph = inspect(sources(config), config.completion);
   const scope = { config: config.file, tickets: config.directory };
   if (ticket_graph.issues.length)
-    throw new Failure("INVALID_GRAPH", "票图有结构错误。", {
-      issues: ticket_graph.issues,
-      scope,
-    });
+    throw new Failure(
+      "INVALID_GRAPH",
+      "The ticket graph contains structural errors.",
+      {
+        issues: ticket_graph.issues,
+        scope,
+      },
+    );
   return { ticket_graph, scope };
 }
 function check(config: Configuration) {

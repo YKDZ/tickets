@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 process.exitCode = await runCli({
   argv: process.argv,
   write: nodeCliOutput({ stdout: process.stdout, stderr: process.stderr }),
-  // 身份读取和校验也使用 runCli 的意外故障出口。
+  // Read the command identity inside the CLI error boundary.
   get identity() {
     return cliCommandIdentity(require("../package.json"));
   },

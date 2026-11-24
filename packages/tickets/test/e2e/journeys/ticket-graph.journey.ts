@@ -25,7 +25,7 @@ const journey: CliJourney = {
     const config = ["--config", "ticket-graph.json"];
     return [
       {
-        name: "初始化",
+        name: "Initialize",
         args: [
           "init",
           ...config,
@@ -35,22 +35,28 @@ const journey: CliJourney = {
           " done ",
         ],
       },
-      { name: "检查", args: ["check", ...config] },
-      { name: "前置未完成", args: ["list", ...config, "--filter", "blocked"] },
+      { name: "Check", args: ["check", ...config] },
       {
-        name: "批量修改",
+        name: "List blocked tickets",
+        args: ["list", ...config, "--filter", "blocked"],
+      },
+      {
+        name: "Update statuses",
         args: ["set-status", ...config, "01", "02", "--status", " done "],
       },
       {
-        name: "无变化",
+        name: "Repeat status update",
         args: ["set-status", ...config, "01", "--status", " done "],
       },
-      { name: "引入环失败", args: ["set-deps", ...config, "01", "02"] },
-      { name: "清空依赖", args: ["set-deps", ...config, "02", "--clear"] },
-      { name: "完成查询", args: ["list", ...config] },
-      { name: "历史", args: ["history", ...config] },
+      { name: "Reject a cycle", args: ["set-deps", ...config, "01", "02"] },
       {
-        name: "禁止覆盖",
+        name: "Clear prerequisites",
+        args: ["set-deps", ...config, "02", "--clear"],
+      },
+      { name: "List completed tickets", args: ["list", ...config] },
+      { name: "Read history", args: ["history", ...config] },
+      {
+        name: "Reject config overwrite",
         args: [
           "init",
           ...config,
@@ -60,10 +66,74 @@ const journey: CliJourney = {
           "done",
         ],
       },
-      { name: "用法错误", args: ["set-deps", ...config, "02"] },
-      { name: "完整契约", args: ["schema"] },
-      { name: "帮助", args: ["--help"] },
-      { name: "版本", args: ["--version"] },
+      { name: "Report usage error", args: ["set-deps", ...config, "02"] },
+      { name: "Discover command contracts", args: ["--schema"] },
+      { name: "Show help", args: ["--help"] },
+      { name: "Show version", args: ["--version"] },
+      { name: "Discover input schema", args: ["set-deps", "--schema=input"] },
+      {
+        name: "Read a text result",
+        args: ["check", ...config, "--output", "text"],
+      },
+      {
+        name: "Discover check wire format",
+        args: ["check", "--schema=wire:structured"],
+      },
+      {
+        name: "Discover list success format",
+        args: ["list", "--schema=success:structured"],
+      },
+      {
+        name: "Initialize a second configuration in text mode",
+        args: [
+          "init",
+          "--config",
+          "alternate.json",
+          "--tickets",
+          "issues",
+          "--completion-value",
+          "done",
+          "--output",
+          "text",
+        ],
+      },
+      {
+        name: "List tickets in text mode",
+        args: ["list", ...config, "--output", "text"],
+      },
+      {
+        name: "Repeat a status in text mode",
+        args: [
+          "set-status",
+          ...config,
+          "01",
+          "--status",
+          " done ",
+          "--output",
+          "text",
+        ],
+      },
+      {
+        name: "Clear prerequisites in text mode",
+        args: ["set-deps", ...config, "02", "--clear", "--output", "text"],
+      },
+      {
+        name: "Read history in text mode",
+        args: ["history", ...config, "--output", "text"],
+      },
+      {
+        name: "Reject overwriting an existing configuration in text mode",
+        args: [
+          "init",
+          ...config,
+          "--tickets",
+          "issues",
+          "--completion-value",
+          "done",
+          "--output",
+          "text",
+        ],
+      },
     ];
   },
   async assertions({ context, results }) {
@@ -74,7 +144,8 @@ const journey: CliJourney = {
     );
     const data = (index: number) => JSON.parse(results[index]!.stdout).data;
     for (const [index, result] of results.entries()) {
-      const expected = index === 5 || index === 9 ? 1 : index === 10 ? 2 : 0;
+      const expected =
+        index === 5 || index === 9 || index === 23 ? 1 : index === 10 ? 2 : 0;
       assert.equal(
         result.exitCode,
         expected,
@@ -83,7 +154,10 @@ const journey: CliJourney = {
       if (expected === 0) assert.equal(result.stderr, "");
       else assert.equal(result.stdout, "");
     }
-    assert.equal(data(0).created, true);
+    const initialized = JSON.parse(results[0]!.stdout);
+    assert.equal(initialized.schemaVersion, "3");
+    assert.equal(initialized.outputMode, "structured");
+    assert.equal(initialized.data.created, true);
     assert.equal(data(1).total, 2);
     assert.deepEqual(
       data(2).tickets.map((ticket: { id: string }) => ticket.id),
@@ -110,17 +184,13 @@ const journey: CliJourney = {
       "CONFIG_EXISTS",
     );
     assert.equal(JSON.parse(results[10]!.stderr).kind, "usageFailure");
-    const manifest = data(11).manifest;
-    for (const name of [
-      "init",
-      "check",
-      "list",
-      "setStatus",
-      "setDeps",
-      "history",
-      "schema",
-    ])
-      assert.ok(manifest.commands[name]);
+    const discovery = JSON.parse(results[11]!.stdout);
+    assert.equal(discovery.kind, "directory");
+    assert.equal(discovery.schemaVersion, "5");
+    assert.deepEqual(
+      discovery.children.map(({ path }: { path: string[] }) => path[0]).sort(),
+      ["check", "history", "init", "list", "set-deps", "set-status"],
+    );
     assert.ok(results[12]!.stdout.includes("set-status"));
     assert.equal(
       results[13]!.stdout,
@@ -130,6 +200,16 @@ const journey: CliJourney = {
       await readFile(path.join(context.workDir, "issues/01-first.md"), "utf8"),
       '---\nstatus: " done "\nblocked_by: []\n---\n正文。\n',
     );
+    assert.equal(JSON.parse(results[14]!.stdout).kind, "input");
+    assert.match(results[15]!.stdout, /Checked 2 tickets/);
+    assert.equal(JSON.parse(results[16]!.stdout).kind, "wire");
+    assert.equal(JSON.parse(results[17]!.stdout).kind, "success");
+    assert.match(results[18]!.stdout, /Created configuration/);
+    assert.match(results[19]!.stdout, /02:  done  /);
+    assert.match(results[20]!.stdout, /Ticket 01: unchanged/);
+    assert.match(results[21]!.stdout, /Ticket 02: unchanged/);
+    assert.match(results[22]!.stdout, /3 changes/);
+    assert.match(results[23]!.stderr, /already exists/);
     const config = JSON.parse(
       await readFile(path.join(context.workDir, "ticket-graph.json"), "utf8"),
     );

@@ -5,7 +5,7 @@ import type {
   ChangeResult,
 } from "../../src/types.ts";
 
-// 各测试按所调用命令断言这些外部结果；解析本身不承担运行时校验。
+// Tests assert command-specific results after decoding the output.
 export interface TicketView {
   id: string;
   file: string;

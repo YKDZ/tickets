@@ -1,33 +1,31 @@
 ---
 name: tickets
-description: 使用 Tickets 管理本地 Markdown 票据的依赖、状态与变更历史。
+description: Manage dependencies, statuses, and change history for local Markdown tickets.
 disable-model-invocation: true
 ---
 
 # Tickets
 
-## 接入
+## Getting started
 
-用户明确启用选定票集后使用。
+Use Tickets after the user explicitly enables it for the selected ticket set. Run `pnpm dlx @ykdz/tickets@latest --help` for commands and `npm view @ykdz/tickets@latest readme` for the ticket file format.
 
-通过 `pnpm dlx @ykdz/tickets@latest --help` 调用工具。票文件格式见 `npm view @ykdz/tickets@latest readme`。
+Follow the project's ticket conventions and existing configuration. If there is no configuration, initialize one with the project's ticket directory and completion values.
 
-沿用项目既有票据约定和配置；缺少配置时按项目约定的票目录和完成值初始化。
+## Coordinating work
 
-## 工作判断
+Use the original requirements and evidence to decide scope, priorities, assignments, and acceptance. Tickets checks declared structure. Assess requirements coverage, missing dependencies, and delivery yourself.
 
-依据原始需求和实际证据决定工作范围、优先级、派发与验收。工具只检查已声明的结构，无法判断需求是否覆盖、依赖是否遗漏或交付是否属实。
+- A ticket is unblocked when all of its declared direct prerequisites are marked complete. Choose assignment order and scope based on the work itself.
+- When a prerequisite is outstanding, advance any work that can proceed independently. Wait for its deliverable before starting work that requires it.
+- Mark a ticket complete once its agreed deliverable is available and dependent tickets can proceed on that basis. If agreed work remains, use Tickets to restore an appropriate incomplete status and review affected dependent tickets.
 
-- 查询中的前置已满足仅指已登记的直接前置票均被标记完成，不限定派发顺序或工作范围。
-- 前置尚未满足的票，也可以推进不依赖缺失交付的独立部分；需要该交付的部分仍须等待。
-- 本票约定的交付已具备，后继票可以据此继续实施时，才标记完成；发现约定内仍有未完成项时，通过工具改回项目适用的未完成状态，并核对受影响的后继票。
+## Maintaining ticket data
 
-## 数据维护
+Ticket files are the source of truth for current data. Use history to trace changes. Keep ticket identifiers stable after creation and edit the Markdown body as needed.
 
-票文件是当前数据的唯一依据，历史只供追溯。建票后保持标识稳定，正文自由编写。
+Set initial field values when creating a ticket. Use Tickets for later status and dependency changes. Edit the body and run write commands at different times for the same ticket. Preserve machine-managed fields.
 
-创建票时可直接写入初值，此后的状态和依赖变更通过工具完成。同票的正文编辑与命令写入错开，并保留机器字段。
+If a malformed field prevents Tickets from reading a file, fix only its format, preserve the original value, and run a check. Repair structural problems ticket by ticket and check for remaining issues after each change.
 
-字段损坏导致工具无法读取时，先做保留原值的最小格式修复，再检查。结构问题可逐票修复；一次修改成功不表示其他问题也已解决。
-
-修改失败时，先核对返回结果与实际写入的票文件和历史，再决定是否重试或继续修复；已保存的修改仍然有效。查询失败不能当作没有待办工作。
+If a change fails, compare the result with the actual ticket files and history before retrying. Changes already saved still apply. If a query fails, resolve the failure before drawing conclusions about outstanding work.

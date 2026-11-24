@@ -10,6 +10,7 @@ coverage/
 data/
 playwright-report/
 test-results/
+.changeset/packed/
 
 /docs
 /.scratch

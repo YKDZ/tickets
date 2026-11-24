@@ -48,7 +48,7 @@ function run(config: string, ...args: string[]) {
   return result;
 }
 
-void test("整批目标和候选内容全部通过预检后才写入", (t) => {
+void test("Validate the entire batch before writing", (t) => {
   for (const later of ["missing", "uneditable", "duplicate"] as const) {
     const f = fixture(t, {
       "01": ticket(),
@@ -83,7 +83,7 @@ void test("整批目标和候选内容全部通过预检后才写入", (t) => {
   }
 });
 
-void test("批量修改保留无关旧错和原文，无变化票不写入，依赖未完成也可设置状态", (t) => {
+void test("Preserve unrelated errors and original text while updating the batch", (t) => {
   const original =
     '---\r\nstatus: open # 当前\r\nblocked_by: ["02"]\r\nowner: 张三\r\n---\r\n正文\r\n';
   const f = fixture(t, {
@@ -121,7 +121,7 @@ void test("批量修改保留无关旧错和原文，无变化票不写入，依
   assert.equal(run(blocked.config, "01", "--status", "done").status, 0);
 });
 
-void test("首票已保存但历史失败时，后续票不执行，结果逐票保留实际效果", (t) => {
+void test("Stop the batch after a history failure and report each save result", (t) => {
   const f = fixture(t, { "01": ticket(), "02": ticket() });
   mkdirSync(f.history);
   const result = run(f.config, "01", "02", "--status", "done");
@@ -146,7 +146,7 @@ void test("首票已保存但历史失败时，后续票不执行，结果逐票
 });
 
 void test(
-  "后续票写入失败保留前票及其历史，并清理未保存的临时文件",
+  "Preserve earlier saves and remove the temporary file when a later write fails",
   { skip: process.platform !== "linux" },
   (t) => {
     const f = fixture(t, {
@@ -207,7 +207,7 @@ void test(
 );
 
 void test(
-  "输出故障保留整批票及历史，不重复执行修改",
+  "Preserve batch writes after output fails without replaying the changes",
   { skip: process.platform !== "linux" },
   (t) => {
     const f = fixture(t, { "01": ticket(), "02": ticket() });
@@ -259,7 +259,7 @@ void test(
   },
 );
 
-void test("并行批量修改使用同一票集锁，每批读取和保存的状态连续一致", async (t) => {
+void test("Serialize concurrent batches with the ticket set lock", async (t) => {
   const ids = Array.from({ length: 30 }, (_, index) =>
     String(index + 1).padStart(2, "0"),
   );
@@ -316,7 +316,7 @@ void test("并行批量修改使用同一票集锁，每批读取和保存的状
     assert.ok(readFileSync(f.path(id), "utf8").includes(`status: "${second}"`));
 });
 
-void test("契约用法错误在访问文件前返回完整定位信息；帮助立即生效", (t) => {
+void test("Report usage errors before accessing files and allow help immediately", (t) => {
   const f = fixture(t, { "01": ticket() });
   for (const args of [
     ["set-status", "01"],
@@ -337,7 +337,7 @@ void test("契约用法错误在访问文件前返回完整定位信息；帮助
     assert.equal(result.status, 2, result.stderr);
     assert.equal(result.stdout, "");
     const error = JSON.parse(result.stderr);
-    assert.equal(error.schemaVersion, "1");
+    assert.equal(error.schemaVersion, "3");
     assert.equal(error.kind, "usageFailure");
     assert.ok(error.issues.length);
     assert.equal(typeof error.usage, "string");
@@ -366,7 +366,7 @@ void test("契约用法错误在访问文件前返回完整定位信息；帮助
   }
 });
 
-void test("一次修改多张票，合并重复标识并按首次出现返回结果", (t) => {
+void test("Deduplicate ticket IDs in first-seen order", (t) => {
   const root = mkdtempSync(join(tmpdir(), "ticket-graph-batch-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "issues"));

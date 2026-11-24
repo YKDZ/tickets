@@ -18,7 +18,7 @@ import { success, failure } from "./cli-output.ts";
 
 const cli = fileURLToPath(new URL("../../src/cli.ts", import.meta.url));
 
-void test("公开配置定义与命令对同一组项目配置判断一致并保留原值", (t) => {
+void test("Apply the same configuration rules in the public schema and CLI", (t) => {
   const schema = JSON.parse(
     readFileSync(
       new URL("../../ticket-graph.schema.json", import.meta.url),

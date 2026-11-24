@@ -1,24 +1,22 @@
 import { createRequire } from "node:module";
 
-import { toJsonSchema } from "@valibot/to-json-schema";
-import * as v from "valibot";
+import { z } from "zod";
 
-const nonblank = v.pipe(v.string(), v.regex(/\S/, "必须包含非空白字符。"));
-const completionEntries = {
-  values: v.pipe(v.array(nonblank), v.minLength(1, "至少需要一个完成值。")),
-};
-// 使用无原型字段表，使 constructor 等未知字段也按普通配置字段拒绝。
-Object.setPrototypeOf(completionEntries, null);
-const configEntries = {
-  $schema: v.optional(v.string()),
+const nonblank = z
+  .string()
+  .regex(/\S/, "Must contain a non-whitespace character.");
+export const configSchema = z.strictObject({
+  $schema: z.string().optional(),
   tickets: nonblank,
-  completion: v.strictObject(completionEntries),
-};
-Object.setPrototypeOf(configEntries, null);
-export const configSchema = v.strictObject(configEntries);
+  completion: z.strictObject({
+    values: z
+      .array(nonblank)
+      .min(1, "At least one completion value is required."),
+  }),
+});
 
 export function publicConfigSchema() {
-  return toJsonSchema(configSchema);
+  return z.toJSONSchema(configSchema, { target: "draft-7" });
 }
 
 export function configSchemaUrl() {
