@@ -3,47 +3,7 @@ export type CliCommandIdentity = {
   readonly version: string;
 };
 
-export function validateCliCommandName(
-  commandName: string,
-  occupiedCommandNames: readonly string[] = [],
-): string {
-  if (/[/\\]/u.test(commandName)) {
-    throw new Error(
-      `CLI command name must not be a path; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  if (/\p{White_Space}/u.test(commandName)) {
-    throw new Error(
-      `CLI command name must not contain whitespace; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  if (/\p{Control}/u.test(commandName)) {
-    throw new Error(
-      `CLI command name must not contain a control character; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  if (commandName.startsWith("-")) {
-    throw new Error(
-      `CLI command name must not have a leading hyphen; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(commandName)) {
-    throw new Error(
-      `CLI command name must use lowercase ASCII letters, digits, and single hyphens; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  if (occupiedCommandNames.includes(commandName)) {
-    throw new Error(
-      `CLI command name is already used by another workspace package; received ${JSON.stringify(commandName)}`,
-    );
-  }
-  return commandName;
-}
-
-export function cliCommandIdentity(
-  manifest: unknown,
-  occupiedCommandNames: readonly string[] = [],
-): CliCommandIdentity {
+export function cliCommandIdentity(manifest: unknown): CliCommandIdentity {
   if (
     typeof manifest !== "object" ||
     manifest === null ||
@@ -82,7 +42,7 @@ export function cliCommandIdentity(
   }
 
   return {
-    commandName: validateCliCommandName(commandName, occupiedCommandNames),
+    commandName,
     version,
   };
 }

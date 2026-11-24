@@ -1,41 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  cliCommandIdentity,
-  validateCliCommandName,
-} from "../../src/cli-command-identity.ts";
+import { cliCommandIdentity } from "../../src/cli-command-identity.ts";
 
 void describe("CLI command identity", () => {
-  for (const { name, command, message } of [
-    { name: "path separator", command: "tools/release", message: "path" },
-    { name: "backslash path", command: "tools\\release", message: "path" },
-    { name: "whitespace", command: "release tool", message: "whitespace" },
-    { name: "control character", command: "release\u0000", message: "control" },
-    { name: "leading hyphen", command: "-release", message: "leading hyphen" },
-    { name: "uppercase ASCII", command: "Release", message: "lowercase ASCII" },
-    { name: "non-ASCII", command: "发布", message: "lowercase ASCII" },
-  ]) {
-    void it(`Reject invalid command name: ${name}`, () => {
-      assert.throws(
-        () => validateCliCommandName(command),
-        (error: unknown) => {
-          assert.ok(error instanceof Error);
-          assert.ok(error.message.includes(message));
-          return true;
-        },
-      );
-    });
-  }
-
-  void it("Accept valid names and reject workspace collisions", () => {
-    assert.equal(validateCliCommandName("release-tool", []), "release-tool");
-    assert.throws(
-      () => validateCliCommandName("release-tool", ["release-tool"]),
-      /already used by another workspace package/,
-    );
-  });
-
   void it("derives command and unpublished version only from manifest facts", () => {
     assert.deepStrictEqual(
       cliCommandIdentity({ bin: { release: "./dist/cli.js" } }),
