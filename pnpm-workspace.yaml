@@ -16,6 +16,7 @@ minimumReleaseAgeStrict: true
 
 minimumReleaseAgeExclude:
   - "@ykdz/template"
+  - "@ykdz/cli-contract@0.7.0"
 
 allowBuilds:
   esbuild: true
